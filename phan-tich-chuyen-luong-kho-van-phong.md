@@ -82,11 +82,13 @@ Các điểm trên là rủi ro quan sát từ mã nguồn, chưa phải kết l
 
 ## 4. Hệ thống mới có gì và còn thiếu gì
 
-### 4.1. Có thể tái sử dụng
+### 4.1. Phân biệt module lương sale với nguồn dữ liệu kho
 
-- Module nhân viên và cấu hình lương, bảo hiểm, thuế, điều chỉnh lương.
-- Các màn hình `salary-setup`, `payroll-config`, `payroll-run`, `payroll-result`, `salary-adjustment` trong `vl-cms/src/features`.
-- `PayrollService` cùng các service trong `vl-shared/.../service/salary` đã tổng hợp thu nhập, khấu trừ và kết quả lương. Luồng hiện có dùng scope, lương B2B và các nguồn thu nhập của hệ thống mới; cần thiết kế điểm tích hợp riêng cho kho/văn phòng.
+**Theo xác nhận của người phụ trách, `salary-setup`, `payroll-config`, `payroll-run`, `payroll-result`, `salary-adjustment` là các chức năng lương sale. Không đưa các màn hình, API, cấu hình hoặc bảng kết quả này vào phương án tái sử dụng cho lương kho/văn phòng.**
+
+- `PayrollService` cùng các service trong `vl-shared/.../service/salary` thuộc luồng lương hiện có với scope và lương B2B. Đây không phải bộ máy tính lương chung đã được xác minh phù hợp với kho/văn phòng.
+- Lương kho/văn phòng cần màn hình, API, cấu hình, phiên tính, kết quả và điều chỉnh riêng. Phần dùng chung giữa kho và văn phòng sẽ thiết kế từ nghiệp vụ của hai nhóm này.
+- Hồ sơ định danh nhân viên và hạ tầng đăng nhập/phân quyền chỉ xem xét dùng chung sau khi kiểm tra mô hình dữ liệu. Các trường thiết lập lương sale không mặc nhiên áp dụng cho kho/văn phòng.
 - Module sổ chi tiết kho ở `vl-cms/src/features/inventory/ledger` và chứng từ ở `inventory/voucher`.
 - `InventoryLedger` có chứng từ/dòng chứng từ, ngày giờ hạch toán, sản phẩm, kho, lô, số lượng, đơn vị, loại chứng từ và tham chiếu.
 - `InventoryVoucher` có loại nghiệp vụ, ngày chứng từ/ngày hạch toán, trạng thái, kho vật lý, nguồn chứng từ và liên kết sản xuất. `InventoryVoucherService` có ghi sổ, sửa chứng từ đã ghi sổ và bỏ ghi sổ.
@@ -95,7 +97,7 @@ Các điểm trên là rủi ro quan sát từ mã nguồn, chưa phải kết l
 
 Entity `InventoryLedger` hiện chưa có người thực hiện, tổ/ca làm, công việc tính lương, tỷ lệ chia công hoặc đơn giá tiền công. Người lập/ghi sổ chứng từ không mặc nhiên là người làm việc hưởng lương.
 
-Qua phạm vi rà soát chưa thấy bộ chức năng lương kho/văn phòng tương đương mã cũ, bao gồm phân công sản lượng, đóng thùng và chấm công/nghỉ phép tương ứng. Cần rà soát thêm các chức năng dùng chung trước khi tạo bảng mới để tránh trùng dữ liệu.
+Qua phạm vi rà soát chưa thấy bộ chức năng lương kho/văn phòng tương đương mã cũ, bao gồm phân công sản lượng, đóng thùng và chấm công/nghỉ phép tương ứng. Cần xác minh nguồn định danh nhân viên để liên kết đúng; các dữ liệu công, cấu hình lương và kết quả kho/văn phòng được thiết kế riêng với lương sale.
 
 **Kết luận kỹ thuật:** có thể tự động lấy số lượng từ kho, nhưng chưa đủ dữ liệu để tự động tính lương theo nhân viên hoàn toàn. Cần một lớp ghi nhận công việc và phân bổ sản lượng nối giữa kho và bảng lương.
 
@@ -158,7 +160,7 @@ Sổ kho không thay thế chấm công. Người có mặt nhưng chưa có ch�
 
 ### 6.1. Tổ chức chức năng
 
-Đề xuất bổ sung dưới nhóm Lương: **Lương kho**, **Lương văn phòng**, **Công và phép**, **Sản lượng tính công**, **Đơn giá và hệ số**. Tận dụng hồ sơ nhân viên, phát sinh/điều chỉnh và phân quyền hiện có sau khi kiểm tra khả năng đáp ứng.
+Đề xuất tạo nhóm chức năng **Lương kho và văn phòng**, gồm **Lương kho**, **Lương văn phòng**, **Công và phép**, **Sản lượng tính công**, **Đơn giá và hệ số**, **Phát sinh và điều chỉnh**. Nhóm này có route, API và quyền nghiệp vụ riêng. Chỉ liên kết hồ sơ định danh nhân viên và dùng hạ tầng phân quyền hiện có sau khi xác minh; phát sinh/điều chỉnh lương kho và văn phòng được quản lý riêng với sale.
 
 Màn hình ưu tiên để kế toán xem sớm:
 
@@ -193,11 +195,15 @@ Số tiền và số lượng dùng `BigDecimal`/`DECIMAL`; chốt cách làm tr
 - Có fingerprint/version dữ liệu nguồn để phát hiện chỉnh sửa; lưu snapshot để vẫn giải thích được bảng lương khi bản ghi nguồn bị thay đổi.
 - Khi chốt phải kiểm tra lại phiên nguồn và thực hiện giao dịch để tránh nguồn thay đổi giữa lúc tính và lúc duyệt.
 
-### 6.4. Tích hợp với module lương hiện có
+### 6.4. Xây luồng lương kho/văn phòng độc lập với lương sale
 
-Tách cách tính thu nhập kho và văn phòng thành các service riêng, sau đó dùng phần khấu trừ/kết quả chung khi hợp đồng dữ liệu đã rõ. Không đưa tiền công kho vào một khoản thu nhập tổng hợp mà mất nguồn truy vết hoặc bị cộng lại lương cơ bản.
+Tạo service tính lương kho và service tính lương văn phòng riêng, dựa trên quy tắc đã đối chiếu từ hệ thống cũ. Các phần tương đồng giữa hai nhóm như công/phép, cấu hình khấu trừ và lưu phiên kết quả có thể tổ chức trong module kho/văn phòng sau khi chốt nghiệp vụ.
 
-`PayrollService.run(period)` hiện có lệnh xóa `payrolls` theo kỳ. Trước khi dùng chung cho nhiều nhóm phải sửa phạm vi hoặc cơ chế phiên tính để chạy lương kho không xóa/kéo tính lại kết quả nhóm khác. Cần kiểm thử tác động đến luồng lương hiện tại.
+- Tạo API, cấu hình, bảng phiên tính, kết quả, chi tiết và điều chỉnh riêng cho kho/văn phòng; tên cụ thể chốt ở thiết kế chi tiết.
+- Không gọi pipeline sale, không ghi kết quả kho/văn phòng vào `payrolls` của sale và không mở rộng các màn hình sale để xử lý hai nhóm mới.
+- `PayrollService.run(period)` hiện xóa `payrolls` theo kỳ. Đây là lý do phải giữ dữ liệu kho/văn phòng ngoài phạm vi chạy của service này; không đề xuất sửa pipeline sale trong phạm vi chuyển lương kho/văn phòng.
+- Cấu hình bảo hiểm/thuế của sale cũng không mặc nhiên dùng chung. Xây cấu hình theo kỳ cho kho/văn phòng và để kế toán xác nhận. Nếu về sau muốn trích xuất thư viện tính toán dùng chung, đó là thay đổi riêng cần đánh giá và kiểm thử.
+- Kiểm thử sự độc lập: chạy, chạy lại, chốt và điều chỉnh lương của mỗi module không thay đổi dữ liệu của module còn lại.
 
 Đề xuất API cho các thao tác: xem trước nguồn, đồng bộ nguồn, cập nhật phân bổ, duyệt công, tính thử, lấy chi tiết, chốt và điều chỉnh. Tất cả thao tác ghi phải kiểm tra quyền backend, trạng thái kỳ và ghi nhật ký.
 
@@ -208,7 +214,7 @@ Tách cách tính thu nhập kho và văn phòng thành các service riêng, sau
 | 0. Chốt mẫu nghiệp vụ | Cùng Nghĩa/kế toán chọn một kỳ lương, vài chứng từ đại diện; xác định đơn vị, công đoạn, cách chia, ngày tính công | Bộ mẫu đầu vào → kết quả và danh sách quy tắc được duyệt |
 | 1. Demo lương kho | Nối nguồn kho cho nghiệp vụ ưu tiên, gán nhân viên, cấu hình đơn giá, tính thử và xem chi tiết | Kế toán kiểm tra được một tháng mẫu, truy ngược được số liệu |
 | 2. Hoàn thiện kho | Công/phép/tăng ca, phát sinh, khóa kỳ, sửa nguồn, phân quyền, in/xuất | Lương kho chạy độc lập và nghiệm thu |
-| 3. Lương văn phòng | Chuyển công thức, dữ liệu đầu vào, bảng tháng/năm, phiếu lương; tích hợp cấu hình chung | Lương văn phòng đối chiếu đạt |
+| 3. Lương văn phòng | Chuyển công thức, dữ liệu đầu vào, bảng tháng/năm, phiếu lương; dùng cấu hình thuộc module kho/văn phòng | Lương văn phòng đối chiếu đạt |
 | 4. Chuyển dữ liệu và ngừng cũ | Chuyển lịch sử, đối soát, vận hành song song trong kỳ được chọn, chuyển chính thức | Có dữ liệu lưu trữ và có thể ngừng gia hạn dịch vụ cũ |
 
 Chưa chốt số ngày thực hiện trước khi có mẫu dữ liệu và danh sách nghiệp vụ nguồn. Giai đoạn 1 nên đủ nhỏ để kế toán xem sớm; các yêu cầu phát sinh từ Nghĩa được ghi thành danh sách thay đổi có mẫu kiểm chứng.
@@ -290,8 +296,8 @@ Giữ số tiền lương lịch sử đã duyệt theo bản gốc. Không tín
 | `vl-shared/src/main/java/com/vlife/shared/jdbc/entity/inventory/InventoryLedger.java` | Nguồn sổ chi tiết kho |
 | `vl-shared/src/main/java/com/vlife/shared/jdbc/entity/inventory/InventoryVoucher.java` | Chứng từ, trạng thái và liên kết nghiệp vụ |
 | `vl-shared/src/main/java/com/vlife/shared/service/inventory/InventoryVoucherService.java` | Ghi sổ, rewrite và bỏ ghi sổ |
-| `vl-shared/src/main/java/com/vlife/shared/service/salary/PayrollService.java` | Tổng hợp và kết quả lương hiện có; cần kiểm soát phạm vi chạy |
+| `vl-shared/src/main/java/com/vlife/shared/service/salary/PayrollService.java` | Luồng lương sale cần giữ độc lập; không dùng để chạy lương kho/văn phòng |
 | `vl-cms/src/features/inventory/ledger` | Giao diện nguồn sản lượng |
-| `vl-cms/src/features/payroll-run` và `payroll-result` | Tham khảo quy trình và trình bày kết quả |
+| `vl-cms/src/features/salary-setup`, `payroll-config`, `payroll-run`, `payroll-result`, `salary-adjustment` | Các màn hình lương sale; không thuộc phương án tái sử dụng |
 
 **Bước tiếp theo đề xuất:** lấy một kỳ lương kho đã duyệt cùng các chứng từ kho tương ứng để lập bảng đối chiếu nguồn → công việc → người làm → tiền công, chốt với Nghĩa rồi triển khai demo lương kho.
