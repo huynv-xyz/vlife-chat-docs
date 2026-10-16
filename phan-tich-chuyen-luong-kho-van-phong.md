@@ -6,6 +6,8 @@ Ngày lập: 16/10/2026. Trạng thái: đề xuất nghiệp vụ và kỹ thu�
 
 Chuyển chức năng tính lương kho và văn phòng từ trang Kế Toán VLife cũ sang trang mới để người dùng làm việc trên một hệ thống và có thể ngừng gia hạn hệ thống cũ. Ưu tiên lương kho để kế toán xem, đối chiếu và trao đổi với Nghĩa trước khi hoàn thiện.
 
+**Phạm vi bổ sung đã xác nhận:** chuyển đầy đủ hai chức năng **Nghỉ phép** và **Ngày phép** cho nhân viên kho/văn phòng. Đây là phần bắt buộc của đợt chuyển, có màn hình và dữ liệu riêng, không chỉ là số ngày nhập vào bảng lương.
+
 Thay đổi nghiệp vụ quan trọng là lấy sản lượng trực tiếp từ sổ chi tiết kho để tính tiền công, giảm việc nhập lại số lượng ở màn hình chấm công kho. Đây là chuyển cả dữ liệu, quy tắc tính và quy trình vận hành, không chỉ chuyển menu hoặc giao diện bảng lương.
 
 Ảnh cung cấp thể hiện các chức năng liên quan: nhân viên, nghỉ phép, ngày phép, chi phí phát sinh, tăng ca, chấm công; công việc, chi tiết công việc, đóng thùng, chi tiết đóng thùng. Những đầu vào này cần được chuyển hoặc có chức năng thay thế để bảng lương hoạt động độc lập với trang cũ.
@@ -80,6 +82,14 @@ Lưu ý khi chuyển: trong `SalaryOfficeUtils` cũng có một hàm tăng ca v�
 
 Các điểm trên là rủi ro quan sát từ mã nguồn, chưa phải kết luận về sai lệch trên dữ liệu đang vận hành.
 
+### 3.4. Nghỉ phép và ngày phép trong mã cũ
+
+- `OnLeave` lưu số ngày được cấp (`total`) theo nhân viên, loại phép và năm. Giao diện `onleave.ts` có tổng phép, đã đăng ký (`register`), còn lại (`remain`) và chi tiết lịch sử; API dưới `/onleave`.
+- `OnLeaveRegister` lưu lần nghỉ theo ngày, nhân viên, loại phép, buổi sáng/chiều và cờ `paid` (hưởng lương). API dưới `/onleave/register` có tạo, sửa, xóa, danh sách và chi tiết.
+- `LeaveUtils` tính mỗi buổi là 0,5 ngày; cả sáng và chiều là 1 ngày. Ngày nghỉ hưởng lương chỉ được cộng khi `paid = true`.
+- Hai model lương kho/văn phòng đọc đăng ký nghỉ trong tháng để tính công. Trong entity đăng ký đã khảo sát chưa có trạng thái phê duyệt; luồng duyệt ở phần đề xuất bên dưới là chức năng mới, không khẳng định trang cũ đã có.
+- Phải phân biệt **nghỉ hưởng lương** với **nghỉ trừ quỹ phép năm**. Code có cờ hưởng lương và loại phép nhưng chưa đủ để kết luận mọi nghỉ hưởng lương đều phải trừ phép năm.
+
 ## 4. Hệ thống mới có gì và còn thiếu gì
 
 ### 4.1. Phân biệt module lương sale với nguồn dữ liệu kho
@@ -148,7 +158,45 @@ Sổ kho không thay thế chấm công. Người có mặt nhưng chưa có ch�
 - Khi nhiều công việc thuộc cùng ca, tổng giờ tăng ca được kiểm soát độc lập với số dòng sản lượng.
 - Cấu hình lịch làm việc, ngày lễ, phép hưởng lương và ngoại lệ nhân viên theo ngày hiệu lực.
 
-### 5.4. Tính, duyệt và điều chỉnh
+### 5.4. Nghỉ phép — quản lý từng lần nghỉ
+
+Phạm vi áp dụng: nhân viên kho và văn phòng; dữ liệu độc lập với nghiệp vụ lương sale.
+
+- Màn hình danh sách nghỉ có lọc nhân viên, bộ phận, ngày/kỳ, loại nghỉ và trạng thái.
+- Tạo đơn/ghi nhận nghỉ: nhân viên, ngày hoặc khoảng ngày, buổi sáng/chiều/cả ngày, loại nghỉ, lý do, hưởng lương hay không và có trừ quỹ phép hay không theo chính sách loại nghỉ.
+- Khoảng nghỉ nhiều ngày được tách thành chi tiết từng ngày để xét lịch làm việc, ngày lễ, qua tháng và qua năm. MVP hỗ trợ đơn vị 0,5 ngày như cũ; nghỉ theo giờ chỉ bổ sung khi có yêu cầu.
+- Đề xuất trạng thái: nháp → chờ duyệt → đã duyệt/từ chối; đơn đã duyệt có thao tác hủy theo quyền. Chốt với kế toán việc nhân viên tự đăng ký hay người phụ trách nhập hộ.
+- Kiểm tra trùng buổi nghỉ, thời gian ngoài thời gian làm việc và số dư phép; quy tắc cho phép âm/vượt phép phải cấu hình và được duyệt.
+- Chỉ nghỉ đã duyệt được đưa vào công/lương và trừ quỹ phép. Đơn chờ duyệt hiển thị riêng, không tự trừ số dư chính thức.
+- Sửa đơn đã duyệt phải duyệt lại phần thay đổi; hủy phải hoàn phép đúng một lần và giữ lịch sử, không xóa dấu vết.
+- Nghỉ và công/ca cùng thời gian phải được đối soát. Không tự suy luận có đi làm chỉ vì nhân viên được gán trên chứng từ kho.
+- Quyền đề xuất: người nhập tạo/sửa nháp; quản lý duyệt nghỉ; nhân sự/kế toán quản lý chính sách và điều chỉnh. Phân quyền cụ thể chốt với người vận hành.
+
+### 5.5. Ngày phép — quản lý quỹ và số dư
+
+Màn hình **Ngày phép** theo năm, nhân viên và loại phép, hiển thị: số dư đầu kỳ, phép được cấp, phép chuyển năm trước, điều chỉnh, phép đã dùng, phép hết hạn, đơn đang chờ duyệt và số còn lại. Chi tiết nhân viên truy ra từng giao dịch cấp/trừ/hoàn/điều chỉnh.
+
+Công thức đề xuất:
+
+`Phép còn lại = số dư đầu kỳ + cấp mới + chuyển vào + điều chỉnh tăng - điều chỉnh giảm - đã dùng + hoàn phép - hết hạn`
+
+- Số dư đầu kỳ phải quy định rõ đã bao gồm phép chuyển năm trước hay chưa; không cộng hai lần.
+- Cấu hình cấp phép theo năm hoặc tích lũy theo tháng, ngày vào làm, thời gian hiệu lực; không tự gán một định mức chung khi chưa được xác nhận.
+- Chính sách loại nghỉ có hai thuộc tính độc lập: tỷ lệ hưởng lương và có trừ quỹ phép. Ví dụ nghỉ hưởng lương không trừ phép và nghỉ phép năm cần được biểu diễn riêng.
+- Chốt quy tắc chuyển phép qua năm, hạn sử dụng, thứ tự trừ phép cũ/mới và xử lý nhân viên nghỉ việc. Chỉ tự động cấp/chuyển/hết hạn sau khi quy tắc được duyệt.
+- Cấp hoặc điều chỉnh hàng loạt có xem trước, lý do, người duyệt và nhật ký. Chạy lại tác vụ cấp/chuyển phép không được cộng thêm lần nữa.
+- Ghi sổ biến động phép theo giao dịch và liên kết đơn nghỉ; kiểm soát đồng thời khi duyệt nhiều đơn để không vượt số dư ngoài chính sách.
+
+### 5.6. Liên kết nghỉ phép với lương và khóa kỳ
+
+- Tách rõ tổng ngày nghỉ, ngày nghỉ hưởng lương, ngày nghỉ không lương và ngày trừ quỹ phép trong bảng công.
+- Với chính sách tương đương mã cũ: công tính lương = công theo lịch trong thời gian làm việc − ngày nghỉ thuộc lịch làm việc + ngày nghỉ hưởng lương. Loại nghỉ hưởng một phần lương, nếu có, cần công thức riêng được duyệt.
+- Ngày lễ/ngày không làm việc trong khoảng nghỉ không tự động trừ phép hoặc trừ công; dựa trên lịch áp dụng cho nhân viên.
+- Nghỉ có lương không tự sinh tiền sản lượng/đóng thùng; các khoản này vẫn dựa trên công việc thực tế đã duyệt.
+- Phiên tính lương lưu snapshot đơn nghỉ và chính sách đã dùng. Kỳ đã chốt không thay đổi khi sửa đơn nghỉ; xử lý qua điều chỉnh hoặc mở kỳ có quyền.
+- Việc hoàn/trừ lại quỹ phép do sửa đơn và việc điều chỉnh tiền lương phải có liên kết để đối soát, tránh hoàn phép nhưng bỏ sót điều chỉnh công.
+
+### 5.7. Tính, duyệt và điều chỉnh
 
 - Bảng nháp cho thấy từng khoản: lương công, tiền công việc, đóng thùng, tăng ca, phụ cấp, phát sinh, bảo hiểm, thuế, thực nhận.
 - Từ tiền công mở được chi tiết sản lượng → người làm → đơn giá/hệ số → chứng từ nguồn.
@@ -160,14 +208,16 @@ Sổ kho không thay thế chấm công. Người có mặt nhưng chưa có ch�
 
 ### 6.1. Tổ chức chức năng
 
-Đề xuất tạo nhóm chức năng **Lương kho và văn phòng**, gồm **Lương kho**, **Lương văn phòng**, **Công và phép**, **Sản lượng tính công**, **Đơn giá và hệ số**, **Phát sinh và điều chỉnh**. Nhóm này có route, API và quyền nghiệp vụ riêng. Chỉ liên kết hồ sơ định danh nhân viên và dùng hạ tầng phân quyền hiện có sau khi xác minh; phát sinh/điều chỉnh lương kho và văn phòng được quản lý riêng với sale.
+Đề xuất tạo nhóm chức năng **Lương kho và văn phòng**, gồm **Lương kho**, **Lương văn phòng**, **Chấm công**, **Nghỉ phép**, **Ngày phép**, **Sản lượng tính công**, **Đơn giá và hệ số**, **Phát sinh và điều chỉnh**. Nhóm này có route, API và quyền nghiệp vụ riêng. Chỉ liên kết hồ sơ định danh nhân viên và dùng hạ tầng phân quyền hiện có sau khi xác minh; phát sinh/điều chỉnh lương kho và văn phòng được quản lý riêng với sale.
 
 Màn hình ưu tiên để kế toán xem sớm:
 
 1. Sản lượng tính công: lọc ngày/kho/việc, xem nguồn chứng từ, gán tổ/người, hiển thị lỗi và duyệt.
 2. Cấu hình công việc và đơn giá có hiệu lực theo ngày.
 3. Bảng lương kho tháng, chi tiết nhân viên và truy ngược nguồn.
-4. In/xuất bảng lương, phiếu lương và lịch sử phiên tính.
+4. Nghỉ phép: đăng ký, duyệt, lịch nghỉ và đối soát công.
+5. Ngày phép: cấp phép, số dư, chuyển phép và lịch sử biến động.
+6. In/xuất bảng lương, phiếu lương và lịch sử phiên tính.
 
 ### 6.2. Mô hình dữ liệu đề xuất
 
@@ -181,7 +231,10 @@ Tên bảng dưới đây là thiết kế dự kiến; cần đối chiếu sch
 | Đơn giá/hệ số | Việc, loại ca/ngày, đơn giá, hệ số, ngày hiệu lực, phiên bản |
 | Sự kiện sản lượng | Khóa nghiệp vụ nguồn, dòng chứng từ, công đoạn, ngày làm, số lượng gốc/quy đổi và snapshot |
 | Phân bổ nhân viên | Sự kiện, nhân viên, ca/tổ, tỷ trọng, sản lượng hưởng và trạng thái duyệt |
-| Công/phép/tăng ca | Nhân viên, ngày/ca, công hưởng, giờ tăng ca, loại ngày và phê duyệt |
+| Chính sách phép | Loại nghỉ, hưởng lương, trừ quỹ, định mức/cách cấp, chuyển năm/hết hạn, hiệu lực |
+| Đơn nghỉ và chi tiết ngày | Nhân viên, ngày/buổi, loại nghỉ, số ngày, lý do, trạng thái, người duyệt và phiên sửa |
+| Sổ biến động phép | Nhân viên, năm/loại phép, cấp/trừ/hoàn/chuyển/hết hạn/điều chỉnh, số ngày, đơn nguồn, khóa chống trùng |
+| Công/tăng ca | Nhân viên, ngày/ca, công hưởng, giờ tăng ca, loại ngày và phê duyệt; liên kết đơn nghỉ |
 | Phiên lương và chi tiết | Kỳ, nhóm lương, trạng thái, phiên quy tắc, từng khoản thu nhập/khấu trừ, nguồn và lịch sử |
 
 Số tiền và số lượng dùng `BigDecimal`/`DECIMAL`; chốt cách làm tròn ở cấp khoản và cấp tổng. Không dùng phép cộng int cho sản lượng có phần lẻ.
@@ -213,7 +266,7 @@ Tạo service tính lương kho và service tính lương văn phòng riêng, d�
 | --- | --- | --- |
 | 0. Chốt mẫu nghiệp vụ | Cùng Nghĩa/kế toán chọn một kỳ lương, vài chứng từ đại diện; xác định đơn vị, công đoạn, cách chia, ngày tính công | Bộ mẫu đầu vào → kết quả và danh sách quy tắc được duyệt |
 | 1. Demo lương kho | Nối nguồn kho cho nghiệp vụ ưu tiên, gán nhân viên, cấu hình đơn giá, tính thử và xem chi tiết | Kế toán kiểm tra được một tháng mẫu, truy ngược được số liệu |
-| 2. Hoàn thiện kho | Công/phép/tăng ca, phát sinh, khóa kỳ, sửa nguồn, phân quyền, in/xuất | Lương kho chạy độc lập và nghiệm thu |
+| 2. Hoàn thiện kho | Hoàn thiện Nghỉ phép và Ngày phép (cấp, duyệt, số dư, hoàn/chuyển phép), công/tăng ca, phát sinh, khóa kỳ, sửa nguồn, phân quyền, in/xuất | Lương kho chạy độc lập và nghiệm thu |
 | 3. Lương văn phòng | Chuyển công thức, dữ liệu đầu vào, bảng tháng/năm, phiếu lương; dùng cấu hình thuộc module kho/văn phòng | Lương văn phòng đối chiếu đạt |
 | 4. Chuyển dữ liệu và ngừng cũ | Chuyển lịch sử, đối soát, vận hành song song trong kỳ được chọn, chuyển chính thức | Có dữ liệu lưu trữ và có thể ngừng gia hạn dịch vụ cũ |
 
@@ -225,7 +278,10 @@ Chưa chốt số ngày thực hiện trước khi có mẫu dữ liệu và dan
 
 - Nhân viên kho/văn phòng, mã nhân viên, nhóm lương và các tham số trên hồ sơ.
 - Công việc, nhóm việc, đơn giá/hệ số, loại đóng thùng.
-- Chi tiết công việc/đóng thùng, nghỉ phép, số phép còn lại, tăng ca, phát sinh.
+- Chi tiết công việc/đóng thùng, tăng ca, phát sinh.
+- Ngày phép: danh mục loại phép, số ngày được cấp theo nhân viên/năm, số đã dùng và số dư tại ngày chuyển.
+- Nghỉ phép: từng ngày/buổi nghỉ, loại nghỉ, cờ hưởng lương, liên kết nhân viên và lịch sử có thể lấy được. Không tự gán trạng thái “đã duyệt” cho dữ liệu cũ khi chưa có quy tắc chuyển được kế toán xác nhận.
+- Chọn một phương án số dư: dựng lại từ lịch sử đầy đủ hoặc nhập số dư mở đầu tại ngày chuyển. Nếu nhập số dư mở đầu, các đơn trước ngày chuyển chỉ để tra cứu, không trừ lại vào số dư; đơn nghỉ vắt qua ngày chuyển phải tách phần trước/sau để đối soát.
 - Bảng lương tháng/năm, chi tiết nhân viên và snapshot lịch sử; lưu mẫu phiếu lương nếu cần đối chiếu.
 - Mapping ID nguồn sang ID mới; không dùng trực tiếp ID nhân viên giữa hai hệ thống.
 
@@ -253,7 +309,10 @@ Giữ số tiền lương lịch sử đã duyệt theo bản gốc. Không tín
 | Có dữ liệu nào ghi nhận đóng thùng thực tế? | Quyết định tự động lấy nguồn hay cần ghi nhận bổ sung |
 | Lấy ngày làm thực tế, ngày chứng từ hay ngày hạch toán làm kỳ lương? | Xử lý chứng từ nhập muộn và khác tháng |
 | Đơn giá/hệ số cũ còn áp dụng? Ngoại lệ thủ kho còn tồn tại? | Chuyển thành cấu hình thay vì gắn với ID cũ |
-| Công, phép và tăng ca lấy ở đâu; ai duyệt? | Hoàn thiện phần không thể suy ra từ sản lượng |
+| Công, phép và tăng ca lấy ở đâu; ai nhập, ai duyệt nghỉ? | Hoàn thiện phần không thể suy ra từ sản lượng |
+| Ngày phép cấp theo năm hay tháng, có chuyển năm/hết hạn/cho âm không? | Chốt cách quản lý quỹ phép |
+| Loại nghỉ nào hưởng lương, loại nào trừ quỹ phép? | Tránh đồng nhất nghỉ có lương với phép năm |
+| Số dư phép tại ngày chuyển và lịch sử nghỉ đã được đối chiếu chưa? | Không trừ phép hai lần khi chuyển dữ liệu |
 | Thuế, bảo hiểm và phụ cấp dùng cấu hình nào theo kỳ? | Tránh sao chép hằng số cũ hoặc tính trùng khoản |
 | Cần chuyển bao nhiêu năm lịch sử? Kỳ nào làm chuẩn đối chiếu? | Xác định khối lượng migration và tiêu chí nghiệm thu |
 | Ngày hết hạn trang cũ và các chức năng còn sử dụng? | Lập lịch chuyển và ngừng gia hạn khả thi |
@@ -271,6 +330,11 @@ Giữ số tiền lương lịch sử đã duyệt theo bản gốc. Không tín
 - Sửa/bỏ ghi sổ trước chốt cập nhật đúng; sau chốt không âm thầm làm thay đổi lương đã duyệt.
 - Chạy lương kho/văn phòng không xóa hoặc đổi kết quả nhóm lương hiện có ngoài phạm vi.
 - Bảng lương mẫu mới khớp từng khoản với kỳ đối chiếu; sai khác do sửa quy tắc/làm tròn được giải thích và duyệt, không chỉ đối chiếu tổng thực nhận.
+- Nghỉ nửa ngày/cả ngày, nhiều ngày, qua tháng/năm tính đúng theo lịch; không trùng buổi và không trừ phép vào ngày nghỉ theo lịch ngoài quy tắc đã duyệt.
+- Nghỉ hưởng lương và nghỉ trừ quỹ được xử lý độc lập; ví dụ nghỉ không lương giảm công, nghỉ phép hưởng lương giữ công nhưng trừ quỹ đúng số ngày.
+- Duyệt/hủy đơn và chạy lại cấp/chuyển phép nhiều lần không trừ/cộng trùng; hai đơn duyệt đồng thời không làm vượt số dư trái chính sách.
+- Số dư đầu kỳ, giao dịch cấp/trừ/hoàn/hết hạn và số dư cuối kỳ đối soát được từng nhân viên. Dữ liệu nghỉ lịch sử không làm trừ lại số dư nhập khi chuyển.
+- Sửa nghỉ sau chốt lương có lịch sử và điều chỉnh rõ ràng; kết quả đã chốt giữ nguyên cho đến khi có thao tác được phép.
 - Quyền xem, sửa công, sửa đơn giá, chốt và mở kỳ được kiểm tra ở backend; có nhật ký thay đổi.
 - Dữ liệu lịch sử đã chuyển tra cứu được; bản sao lưu cũ khôi phục được trước khi ngừng dịch vụ.
 
@@ -286,6 +350,9 @@ Giữ số tiền lương lịch sử đã duyệt theo bản gốc. Không tín
 | `VLifeEngine/src/com/vlife/utils/warehouse/WHCratingUtils.java` | Tiền đóng thùng |
 | `VLifeAPI/src/com/vlife/api/modules/warehouse/request/quantity/WhQuantityCreateRequest.java` | Chia sản lượng công việc cho nhân viên |
 | `VLifeAPI/src/com/vlife/api/modules/warehouse/request/crating/WhCratingCreateRequest.java` | Chia số lượng đóng thùng |
+| `VLifeEngine/src/com/vlife/entities/staff/onleave/OnLeave.java`, `OnLeaveRegister.java`, `OnLeaveType.java` | Quỹ phép, đăng ký nghỉ và loại phép |
+| `VLifeEngine/src/com/vlife/utils/LeaveUtils.java` | Quy đổi buổi nghỉ và nghỉ hưởng lương |
+| `vlife-cms/src/modules/staff/service/onleave.ts`, `onleave-register.ts` | API và dữ liệu giao diện ngày phép/nghỉ phép |
 | `VLifeEngine/src/com/vlife/models/salary/SalaryOfficeModel.java` | Luồng tính lương văn phòng |
 | `VLifeEngine/src/com/vlife/utils/salary/SalaryOfficeUtils.java` | Thành phần lương văn phòng |
 | `vlife-cms/src/modules/slary/service/warehouse.ts` và `office.ts` | Hợp đồng dữ liệu/API giao diện cũ |
