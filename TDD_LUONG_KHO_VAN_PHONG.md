@@ -1,6 +1,6 @@
 # TDD — Lương kho, văn phòng, nghỉ phép và ngày phép
 
-Cập nhật: 17/10/2026. Phiên bản 1.2 — rút gọn toàn bộ mô hình dữ liệu. Trạng thái: thiết kế đề xuất, chưa triển khai schema/code.
+Cập nhật: 17/10/2026. Phiên bản 1.3 — rút gọn toàn bộ mô hình dữ liệu. Trạng thái: thiết kế đề xuất, chưa triển khai schema/code.
 
 Nghiệp vụ: [Phân tích chuyển chức năng cũ](phan-tich-chuyen-luong-kho-van-phong.md).
 
@@ -10,7 +10,7 @@ Chuyển chức năng cũ: hồ sơ lương, Công việc/Chi tiết công việ
 
 Nhập sản lượng qua phiếu công việc/đóng thùng. Không tích hợp sổ kho trong đợt này. Module độc lập với lương sale: không gọi pipeline sale, không ghi `payrolls`, không dùng các màn hình/cấu hình lương sale.
 
-Namespace đề xuất `staffpay`, bảng `sp_`, API và route `/staff-payroll`. Dùng lại bảng `employees` và màn hình/API nhân viên hiện có; bổ sung cột còn thiếu theo thiết kế mục 5.1. Không tạo bảng hồ sơ nhân viên thứ hai.
+Tên bảng dùng đầy đủ theo nghiệp vụ: `employee_work_*`, `employee_leave_*`, `employee_time_entries`, `employee_pay_items` và `staff_payroll_*`. API và route `/staff-payroll`. Dùng lại bảng `employees` và màn hình/API nhân viên hiện có; bổ sung cột còn thiếu theo thiết kế mục 5.1. Không tạo bảng hồ sơ nhân viên thứ hai.
 
 ## 2. Kết quả rà soát thiết kế
 
@@ -30,10 +30,10 @@ Giữ 14 bảng mới cho danh mục, dữ liệu công, số dư phép và kế
 
 Backend Java/Micronaut theo repo hiện tại:
 
-- Entity/DAO: `vl-shared/.../jdbc/entity/staffpay`, `jdbc/dao/staffpay`.
-- Service: `vl-shared/.../service/staffpay` gồm ProfileConfig, Activity, TimePayItem, Leave, Payroll và Import.
+- Entity/DAO: `vl-shared/.../jdbc/entity/staffpayroll`, `jdbc/dao/staffpayroll`.
+- Service: `vl-shared/.../service/staffpayroll` gồm EmployeeConfig, EmployeeWork, TimePayItem, Leave, Payroll và Import.
 - Calculator kho/văn phòng tách riêng, nhận snapshot và trả breakdown, không truy vấn DB.
-- Controller: `vl-api/.../controller/staffpay`; dùng cơ chế auth, quyền và `ApiResponse` hiện có.
+- Controller: `vl-api/.../controller/staffpayroll`; dùng cơ chế auth, quyền và `ApiResponse` hiện có.
 - Migration: `vl-api/src/main/resources/db/migration`.
 - Frontend: `vl-cms/src/features/staff-payroll`, route trong `_authenticated/staff-payroll`.
 
@@ -43,24 +43,26 @@ React/TypeScript, TanStack Router/Query, React Hook Form, Zod, ExcelJS theo phi�
 
 - Sản lượng `DECIMAL(20,6)`, giờ/ngày công `DECIMAL(8,2)`, tiền trung gian `DECIMAL(20,6)`, tiền VND kết quả `DECIMAL(20,0)`; backend BigDecimal, API decimal là chuỗi.
 - Ngày nghiệp vụ DATE, kỳ YYYY-MM; audit timestamp theo convention hệ thống, hiển thị Asia/Ho_Chi_Minh.
-- Bảng có audit và version; update yêu cầu expected_version. Trạng thái và chuyển kỳ được kiểm tra tại service, không dùng CRUD generic để bỏ qua nghiệp vụ.
+- Tên bảng snake_case số nhiều, mô tả nghiệp vụ đầy đủ; cột FK dùng tên đối tượng như work_type_id, work_entry_id, employee_id. Bảng có audit và version; update yêu cầu expected_version. Trạng thái và chuyển kỳ được kiểm tra tại service, không dùng CRUD generic để bỏ qua nghiệp vụ.
 - Cấu hình hiệu lực `[from,to)`, không chồng khoảng trên cùng khóa nghiệp vụ. Snapshot lưu cả nội dung và ID/version.
 - JSON phải có schema_version và DTO validate; không nhận JSON tùy ý hoặc script công thức. Trường dùng filter/index vẫn là cột thường.
 - Mỗi bảng cần chuyển dữ liệu có `legacy_source`, `legacy_id`, `import_batch`, `source_hash`; unique `(legacy_source, legacy_id)` trên từng bảng. Source phân biệt loại bảng cũ khi gộp.
-- Các thao tác tạo có request_key: lưu khóa này trên bản ghi đích và unique theo loại thao tác. Batch dùng batch_key + số thứ tự phần tử; movements dùng event_key. Retry cùng khóa nhưng khác payload phải báo xung đột.
+- Các thao tác tạo có request_key: lưu khóa này trên bản ghi đích và unique theo loại thao tác. Batch dùng batch_key + số thứ tự phần tử; giao dịch phép dùng event_key. Retry cùng khóa nhưng khác payload phải báo xung đột.
 - Bản ghi đã tham gia lương không hard delete; hủy/ngừng hiệu lực và giữ lịch sử.
 
 ## 5. Mô hình dữ liệu — 14 bảng mới và mở rộng employees
+
+Đã rà tên 14 bảng với mã Java/SQL hiện có trong `vl-shared/src/main` và `vl-api/src/main`: chưa thấy trùng tên. Cần kiểm tra schema DB thực tế trước tạo migration. `employee_work_*` chứa cả công việc và đóng thùng, phân biệt qua kind; `staff_payroll_*` dành cho kỳ/kết quả/cấu hình kho và văn phòng.
 
 ### 5.1. Dùng lại employees; thêm 3 bảng danh mục/cấu hình
 
 | Bảng | Nội dung | Khóa/ràng buộc |
 | --- | --- | --- |
-| `sp_activity_types` | code, name, kind `CATEGORY/WORK/CRATING`, parent_id, unit, rate_scope `CATEGORY/ITEM`, active | unique code; parent của WORK chỉ là CATEGORY; không chu trình |
-| `sp_activity_rates` | activity_type_id, day_shift_type, price, coefficient, divisor, effective_from/to | FK type; không chồng hiệu lực theo type/ca; divisor > 0 |
-| `sp_settings` | code, kind `PAYROLL/CALENDAR/LEAVE_TYPE/SYSTEM`, effective_from/to, payload_json, status, version | index code/effective; cấu hình đã dùng được version hóa |
+| `employee_work_types` | code, name, kind `CATEGORY/WORK/CRATING`, parent_id, unit, rate_scope `CATEGORY/ITEM`, active | unique code; parent của WORK chỉ là CATEGORY; không chu trình |
+| `employee_work_rates` | work_type_id, day_shift_type, price, coefficient, divisor, effective_from/to | FK type; không chồng hiệu lực theo type/ca; divisor > 0 |
+| `staff_payroll_settings` | code, kind `PAYROLL/CALENDAR/LEAVE_TYPE/SYSTEM`, effective_from/to, payload_json, status, version | index code/effective; cấu hình đã dùng được version hóa |
 
-**Hồ sơ dùng lại `employees`:** đã xác minh từ `Employee.java` các cột `code`, `name`, `labor_type`, `basic_salary`, `allowance_salary`, `insurance_base`, `dependent_count`, `personal_insurance_from/to`, `personal_bhxh/bhyt/bhtn/kpcd`, `joined_at`, `left_at`, `status`. Dùng lại cột đúng ý nghĩa; không sao chép sang bảng sp_. Trong công thức, base_salary ánh xạ tới employees.basic_salary; ngày vào/nghỉ việc dùng joined_at/left_at.
+**Hồ sơ dùng lại `employees`:** đã xác minh từ `Employee.java` các cột `code`, `name`, `labor_type`, `basic_salary`, `allowance_salary`, `insurance_base`, `dependent_count`, `personal_insurance_from/to`, `personal_bhxh/bhyt/bhtn/kpcd`, `joined_at`, `left_at`, `status`. Dùng lại cột đúng ý nghĩa; không sao chép sang bảng hồ sơ khác. Trong công thức, base_salary ánh xạ tới employees.basic_salary; ngày vào/nghỉ việc dùng joined_at/left_at.
 
 Cột đề xuất bổ sung vào employees (phải kiểm tra schema DB trước migration):
 
@@ -69,7 +71,7 @@ Cột đề xuất bổ sung vào employees (phải kiểm tra schema DB trướ
 | `payroll_group` | VARCHAR(20) nullable trong giai đoạn chuyển | SALE/WAREHOUSE/OFFICE; một nhóm tính lương hiện hành mỗi nhân viên |
 | `salary_fund` | DECIMAL(20,6) NOT NULL DEFAULT 0 | Lương quỹ văn phòng chưa có trường tương ứng |
 | `staff_pay_allowances` | JSON nullable | Chi tiết phụ cấp kho/văn phòng `{code, amount, treatment, tax_treatment}` |
-| `staff_pay_config_code` | VARCHAR(100) nullable | Chọn bộ cấu hình kho/văn phòng trong sp_settings |
+| `staff_pay_config_code` | VARCHAR(100) nullable | Chọn bộ cấu hình kho/văn phòng trong staff_payroll_settings |
 | `staff_pay_effective_from` | DATE nullable | Ngày bắt đầu áp dụng thiết lập kho/văn phòng hiện hành |
 | `version` | BIGINT NOT NULL DEFAULT 0, nếu chưa có | Kiểm soát sửa đồng thời trên hồ sơ dùng chung |
 
@@ -93,12 +95,12 @@ MVP lưu thiết lập hiện hành trên employees và snapshot đầy đủ tr
 
 | Bảng | Cột nghiệp vụ chính | Ràng buộc/index |
 | --- | --- | --- |
-| `sp_activities` | kind `WORK/CRATING`, work_date, activity_type_id, shift_code, quantity, unit, reported_hours, note, status | index kind/date/status; type phù hợp kind |
-| `sp_activity_allocations` | activity_id, employee_id, quantity | unique activity/employee; tổng bằng phiếu |
-| `sp_time_entries` | employee_id, work_date, slot_code, kind `ATTENDANCE_ADJUSTMENT/OVERTIME`, payable_days_delta, hours, source_refs_json, reason, status | unique employee/date/slot/kind; chỉ trường phù hợp kind được nhập |
-| `sp_pay_items` | employee_id, period, effective_date, kind `INCOME/DEDUCTION`, code, amount, tax_treatment, reason, status, origin_result_id | index employee/period/status |
+| `employee_work_entries` | kind `WORK/CRATING`, work_date, work_type_id, shift_code, quantity, unit, reported_hours, note, status | index kind/date/status; type phù hợp kind |
+| `employee_work_allocations` | work_entry_id, employee_id, quantity | unique work_entry/employee; tổng bằng phiếu |
+| `employee_time_entries` | employee_id, work_date, slot_code, kind `ATTENDANCE_ADJUSTMENT/OVERTIME`, payable_days_delta, hours, source_refs_json, reason, status | unique employee/date/slot/kind; chỉ trường phù hợp kind được nhập |
+| `employee_pay_items` | employee_id, period, effective_date, kind `INCOME/DEDUCTION`, code, amount, tax_treatment, reason, status, origin_result_id | index employee/period/status |
 
-Phiếu/chi tiết đóng thùng và công việc dùng hai bảng đầu, lọc bằng kind. Vẫn giữ bảng allocations vì phải lọc/tổng hợp sản lượng theo nhân viên thường xuyên.
+Phiếu/chi tiết đóng thùng và công việc dùng hai bảng đầu, lọc bằng kind. Vẫn giữ bảng `employee_work_allocations` vì phải lọc/tổng hợp sản lượng theo nhân viên thường xuyên.
 
 Bảng thời gian gộp công điều chỉnh và tăng ca vì cùng quản lý theo người/ngày/ca. Không đưa nghỉ phép vào bảng này. Chấm công mặc định tính từ lịch và nghỉ, chỉ lưu điều chỉnh có lý do, không sinh dữ liệu công rỗng cho từng ngày.
 
@@ -108,13 +110,13 @@ Chi tiết phân bổ được sinh từ phiếu và không sửa trực tiếp.
 
 | Bảng | Cột nghiệp vụ chính | Ràng buộc/index |
 | --- | --- | --- |
-| `sp_leave_entries` | employee_id, leave_date, morning, afternoon, leave_type_code, paid, deduct_balance, reason, status, policy_snapshot_json, approved_by/at, batch_key | index employee/date/status; ít nhất một buổi |
-| `sp_leave_balances` | employee_id, leave_type_code, year, balance, version | unique employee/type/year |
-| `sp_leave_movements` | balance_id, leave_entry_id nullable, operation, signed_days, event_key, reversal_of nullable, reason | unique event_key; index balance_id; giao dịch bất biến |
+| `employee_leave_entries` | employee_id, leave_date, morning, afternoon, leave_type_code, paid, deduct_balance, reason, status, policy_snapshot_json, approved_by/at, batch_key | index employee/date/status; ít nhất một buổi |
+| `employee_leave_balances` | employee_id, leave_type_code, year, balance, version | unique employee/type/year |
+| `employee_leave_transactions` | balance_id, leave_entry_id nullable, operation, signed_days, event_key, reversal_of nullable, reason | unique event_key; index balance_id; giao dịch bất biến |
 
 Một bản nghỉ theo ngày như `OnLeaveRegister` cũ; sáng/chiều mỗi buổi 0,5 ngày. UI nhập nhiều ngày tạo nhiều bản ghi cùng batch_key, xử lý trong một transaction khi lưu/duyệt cả nhóm. Không cần header đơn + bảng ngày riêng.
 
-Loại phép và quy tắc nằm trong sp_settings, không có hai bảng loại/chính sách phép riêng. Số dư dùng balance để hiển thị/khóa; movements để đối soát và hoàn phép. Hai bảng này cần giữ vì chỉ lưu số dư sẽ mất căn cứ điều chỉnh.
+Loại phép và quy tắc nằm trong staff_payroll_settings, không có hai bảng loại/chính sách phép riêng. Số dư dùng balance để hiển thị/khóa; giao dịch phép để đối soát và hoàn phép. Hai bảng này cần giữ vì chỉ lưu số dư sẽ mất căn cứ điều chỉnh.
 
 Operation: OPENING, GRANT, USE, REFUND, ADJUST, TRANSFER_IN, TRANSFER_OUT, EXPIRE. Phép hết hạn/chuyển năm được ghi nhận bằng giao dịch do người phụ trách xác nhận. Không thiết kế lô phép, thứ tự tiêu thụ lô hoặc scheduler tích lũy tự động ở MVP; nếu nghiệp vụ thực tế cần hạn riêng từng đợt cấp thì phải bổ sung thiết kế trước khi bật tính năng đó.
 
@@ -124,10 +126,10 @@ Nghỉ có lương và trừ quỹ là hai thuộc tính độc lập. Không c�
 
 | Bảng | Cột nghiệp vụ chính | Ràng buộc/index |
 | --- | --- | --- |
-| `sp_pay_periods` | period, payroll_group, status `OPEN/LOCKED`, input_revision, current_run_id | unique period/group |
-| `sp_pay_runs` | period_id, sequence, status, input_revision, request_key, settings_snapshot_json, errors_json, origin `NEW/LEGACY` | unique period/sequence; unique request_key |
-| `sp_pay_results` | run_id, employee_id, work_days, gross_total, deduction_total, net_total, input_snapshot_json, breakdown_json, errors_json | unique run/employee; index run |
-| `sp_audit_events` | actor_id, action, entity_type/id, before_json, after_json, reason, correlation_id, timestamp | append-only; index entity/time |
+| `staff_payroll_periods` | period, payroll_group, status `OPEN/LOCKED`, input_revision, current_run_id | unique period/group |
+| `staff_payroll_runs` | period_id, sequence, status, input_revision, request_key, settings_snapshot_json, errors_json, origin `NEW/LEGACY` | unique period/sequence; unique request_key |
+| `staff_payroll_results` | run_id, employee_id, work_days, gross_total, deduction_total, net_total, input_snapshot_json, breakdown_json, errors_json | unique run/employee; index run |
+| `staff_payroll_audit_logs` | actor_id, action, entity_type/id, before_json, after_json, reason, correlation_id, timestamp | append-only; index entity/time |
 
 Snapshot đầu vào và chi tiết khoản tiền lưu ngay trên kết quả nhân viên vì chỉ đọc cùng kết quả; không có bảng input_snapshots/result_lines riêng. Lỗi từng người nằm tại result, lỗi toàn kỳ nằm tại run. Số tổng là cột thường phục vụ bảng lương và báo cáo năm.
 
@@ -137,11 +139,11 @@ Không có bảng import_batches/legacy_maps riêng. Mapping legacy nằm trên 
 
 1. Validate loại phiếu, ngày, đơn vị, người, nhóm lương và lượng > 0.
 2. Khóa MODULE_LOCK, kiểm tra các kỳ bị ảnh hưởng OPEN, kiểm tra version.
-3. Chia lượng cho N người với scale 6; phần dư phân phối theo employee_id tăng dần, bảo toàn tổng. Lưu phiếu và allocations cùng transaction.
-4. Sửa phiếu thay toàn bộ allocations; hủy giữ chi tiết để tra cứu nhưng loại khỏi tính mới. Tăng input_revision và đánh dấu run nháp bị ảnh hưởng STALE.
-5. Chi tiết công việc/đóng thùng đọc allocations JOIN activities; không có endpoint update chi tiết.
+3. Chia lượng cho N người với scale 6; phần dư phân phối theo employee_id tăng dần, bảo toàn tổng. Lưu phiếu và phân bổ cùng transaction.
+4. Sửa phiếu thay toàn bộ chi tiết phân bổ; hủy giữ chi tiết để tra cứu nhưng loại khỏi tính mới. Tăng input_revision và đánh dấu run nháp bị ảnh hưởng STALE.
+5. Chi tiết công việc/đóng thùng đọc `employee_work_allocations` JOIN `employee_work_entries`; không có endpoint update chi tiết.
 
-Giờ tăng ca kho đối chiếu theo người/ngày/ca trong time_entries. Nhiều việc một ca chỉ có một bản giờ; cùng giờ thì liên kết thêm nguồn, khác giờ thì báo cần xác nhận. Sửa/hủy nguồn đặt giờ liên quan về trạng thái cần kiểm tra, không tự lấy SUM/MAX. Tăng ca văn phòng nhập riêng qua UI nhưng dùng cùng bảng. Dữ liệu cũ không xác định ca được phải đưa vào báo cáo đối chiếu.
+Giờ tăng ca kho đối chiếu theo người/ngày/ca trong `employee_time_entries`. Nhiều việc một ca chỉ có một bản giờ; cùng giờ thì liên kết thêm nguồn, khác giờ thì báo cần xác nhận. Sửa/hủy nguồn đặt giờ liên quan về trạng thái cần kiểm tra, không tự lấy SUM/MAX. Tăng ca văn phòng nhập riêng qua UI nhưng dùng cùng bảng. Dữ liệu cũ không xác định ca được phải đưa vào báo cáo đối chiếu.
 
 ## 7. Nghỉ phép/ngày phép
 
@@ -200,7 +202,7 @@ Net        = Gross − bảo hiểm − thuế − phát sinh giảm
 
 ### 8.4. Chính sách và breakdown
 
-PAYROLL settings chứa căn cứ/tỷ lệ/bậc khấu trừ, miễn/giảm, hệ số OT, giờ chuẩn và chế độ làm tròn. Chính sách theo kỳ phải được kế toán duyệt; tài liệu không xác nhận mức pháp lý hiện hành. MVP hỗ trợ nghỉ hưởng lương 0 hoặc 100%.
+Cấu hình kind PAYROLL trong `staff_payroll_settings` chứa căn cứ/tỷ lệ/bậc khấu trừ, miễn/giảm, hệ số OT, giờ chuẩn và chế độ làm tròn. Chính sách theo kỳ phải được kế toán duyệt; tài liệu không xác nhận mức pháp lý hiện hành. MVP hỗ trợ nghỉ hưởng lương 0 hoặc 100%.
 
 BigDecimal cho trung gian, lưu raw_amount và rounded_amount từng khoản trong breakdown_json. Chốt rounding_mode/scale/stage sau đối chiếu `NumberUtils` cũ. Tổng gross/net cộng từ khoản đã làm tròn để phiếu in khớp.
 
@@ -208,13 +210,13 @@ Mỗi dòng breakdown chứa code, quantity, base, rate, coefficient, divisor, r
 
 ## 9. Transaction, tính lại và chốt
 
-Dùng một hàng MODULE_LOCK trong settings để tuần tự hóa giao dịch ghi của module ở MVP. Cách này giảm bảng và tránh race giữa cấu hình, nghỉ phép và chốt lương; chấp nhận hạn chế số thao tác ghi đồng thời. Chỉ giữ khóa trong transaction ngắn, không giữ khi tính toán/in/xuất hoặc chờ người dùng. Theo dõi thời gian chờ; chỉ chuyển sang khóa chi tiết nếu số liệu vận hành cho thấy cần.
+Dùng một hàng MODULE_LOCK trong `staff_payroll_settings` để tuần tự hóa giao dịch ghi của module ở MVP. Cách này giảm bảng và tránh race giữa cấu hình, nghỉ phép và chốt lương; chấp nhận hạn chế số thao tác ghi đồng thời. Chỉ giữ khóa trong transaction ngắn, không giữ khi tính toán/in/xuất hoặc chờ người dùng. Theo dõi thời gian chờ; chỉ chuyển sang khóa chi tiết nếu số liệu vận hành cho thấy cần.
 
 Mọi đường ghi gồm import phải qua service lấy khóa này, rồi đọc lại trạng thái/version. Ghi đầu vào tăng revision kỳ cũ/mới và làm STALE các run nháp; chỉnh cấu hình làm STALE kỳ bị ảnh hưởng. Nếu cấu hình/hồ sơ/lịch sửa hồi tố ảnh hưởng kỳ LOCKED thì chặn và yêu cầu mở kỳ; tạo version tương lai vẫn được phép.
 
 Chạy lương:
 
-1. Transaction lấy MODULE_LOCK, kiểm tra kỳ OPEN, capture settings và đầu vào từng người; tạo CALCULATING và các results chứa snapshot, commit.
+1. Transaction lấy MODULE_LOCK, kiểm tra kỳ OPEN, capture cấu hình và đầu vào từng người; tạo CALCULATING và các bản ghi `staff_payroll_results` chứa snapshot, commit.
 2. Tính ngoài transaction khóa; mỗi người ghi breakdown/số tổng hoặc errors. Kết quả chỉ hiện là khả dụng khi cả run hoàn tất.
 3. Transaction lấy khóa, so input_revision. Không đổi và không lỗi → READY; đã đổi → STALE; lỗi → FAILED. Retry cùng request_key trả lại run, không tạo bản trùng.
 4. Chốt lấy khóa, kiểm tra READY, revision khớp và không có lỗi, set FINALIZED/current_run_id và LOCKED cùng transaction.
@@ -228,12 +230,12 @@ API `/staff-payroll`, paging/ApiResponse theo convention repo, body ghi có expe
 
 | Nhóm API | Thao tác |
 | --- | --- |
-| `/activity-types`, `/activity-rates`, `/settings` | List/get/create/update; cấu hình có hiệu lực và validate kind |
-| `/activities?kind=WORK/CRATING` | List/create/update; `/{id}/confirm`, `/{id}/cancel` |
-| `/activity-details?kind=...&employee_id=...` | Chi tiết phân bổ chỉ đọc |
+| `/work-types`, `/work-rates`, `/settings` | List/get/create/update; cấu hình có hiệu lực và validate kind |
+| `/work-entries?kind=WORK/CRATING` | List/create/update; `/{id}/confirm`, `/{id}/cancel` |
+| `/work-details?kind=...&employee_id=...` | Chi tiết phân bổ chỉ đọc |
 | `/attendance`, `/time-entries`, `/pay-items` | Xem bảng công, ghi giờ/điều chỉnh/phát sinh; confirm/cancel |
 | `/leave-entries` | List/create/update nháp; submit/approve/reject/cancel; batch nhiều ngày |
-| `/leave-balances`, `/leave-balances/{id}/movements` | Ngày phép và lịch sử |
+| `/leave-balances`, `/leave-balances/{id}/transactions` | Ngày phép và lịch sử |
 | `/leave-grants/preview`, `/leave-grants/apply`, `/leave-adjustments`, `/leave-transfers` | Cấp/điều chỉnh/chuyển phép, event key ổn định |
 | `/periods`, `/runs` | Xem kỳ, tạo run theo kỳ/nhóm |
 | `/runs/{id}`, `/runs/{id}/results`, `/runs/{id}/results/{employeeId}` | Trạng thái, bảng và chi tiết/errors |
@@ -255,15 +257,15 @@ Công cụ chuyển dữ liệu theo đợt: export chỉ đọc → manifest/st
 | Nguồn entity cũ | Đích |
 | --- | --- |
 | Staff nhóm 2/3 | Map sang employees, phân WAREHOUSE/OFFICE, dùng cột sẵn có và cột bổ sung; nếu trùng nhân viên SALE thì báo xung đột để xử lý, không ghi đè |
-| WhJobCategory/WhJob và loại đóng thùng | activity_types theo kind/parent |
-| WhCoefficient, giá đóng thùng | activity_rates |
-| WhQuantity/WhCrating | activities theo kind; legacy_source phân biệt nguồn |
-| WhQuantityDetail/WhCratingDetail | activity_allocations, giữ số gốc để đối chiếu |
-| OnLeaveType | settings kind LEAVE_TYPE |
-| OnLeave | balances + OPENING/GRANT theo phương án cutover |
-| OnLeaveRegister | leave_entries; trạng thái và ảnh hưởng số dư theo quy tắc import |
-| Overtime/ConstsIncurred | time_entries/pay_items |
-| WhSalary/SalaryOffice | runs origin LEGACY + results, không tính lại |
+| WhJobCategory/WhJob và loại đóng thùng | `employee_work_types` theo kind/parent |
+| WhCoefficient, giá đóng thùng | `employee_work_rates` |
+| WhQuantity/WhCrating | `employee_work_entries` theo kind; legacy_source phân biệt nguồn |
+| WhQuantityDetail/WhCratingDetail | `employee_work_allocations`, giữ số gốc để đối chiếu |
+| OnLeaveType | `staff_payroll_settings` kind LEAVE_TYPE |
+| OnLeave | `employee_leave_balances` + `employee_leave_transactions` OPENING/GRANT theo phương án cutover |
+| OnLeaveRegister | `employee_leave_entries`; trạng thái và ảnh hưởng số dư theo quy tắc import |
+| Overtime/ConstsIncurred | `employee_time_entries` / `employee_pay_items` |
+| WhSalary/SalaryOffice | `staff_payroll_runs` origin LEGACY + `staff_payroll_results`, không tính lại |
 
 Tên bảng nguồn phải xác nhận qua DAO/schema thật trước script. Không assume trùng ID nhân viên. Import nhiều lần cùng legacy_source/id không nhân bản; source_hash đổi thì preview lại, không ghi đè dữ liệu đã vận hành.
 
@@ -275,7 +277,7 @@ Nếu dùng OPENING, nghỉ trước ngày chuyển chỉ tra cứu và không g
 - Công tháng ngắn, lễ trùng Chủ nhật, vào/nghỉ giữa tháng; D=0 báo lỗi.
 - Một người nhiều việc một ca không nhân giờ; giờ mâu thuẫn cần xác nhận.
 - Nghỉ 0,5/1 ngày, qua năm, có lương không trừ quỹ; hai đơn chồng buổi bị chặn trong giao dịch đồng thời.
-- Retry duyệt/hủy/cấp/chuyển phép không trừ/cộng hai lần; balance bằng tổng movements.
+- Retry duyệt/hủy/cấp/chuyển phép không trừ/cộng hai lần; balance bằng tổng giao dịch phép.
 - Hủy phép năm đã chuyển/hết hạn bị chặn đến khi có điều chỉnh được xác nhận.
 - Sửa nguồn trong lúc tính → STALE; chốt và sửa đồng thời không cùng vượt kiểm tra kỳ; FAILED không được chốt.
 - Snapshot/breakdown JSON validate schema và hiển thị lại đúng dù cấu hình đã đổi; tổng phiếu in = tổng cột kết quả.
