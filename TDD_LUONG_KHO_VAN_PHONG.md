@@ -1,6 +1,6 @@
 # TDD — Lương kho, văn phòng, nghỉ phép và ngày phép
 
-Cập nhật: 17/10/2026. Phiên bản 1.5 — rút gọn toàn bộ mô hình dữ liệu. Trạng thái: thiết kế đề xuất, chưa triển khai schema/code.
+Cập nhật: 17/10/2026. Phiên bản 1.6 — rút gọn toàn bộ mô hình dữ liệu. Trạng thái: thiết kế đề xuất, chưa triển khai schema/code.
 
 Nghiệp vụ: [Phân tích chuyển chức năng cũ](phan-tich-chuyen-luong-kho-van-phong.md).
 
@@ -43,7 +43,7 @@ React/TypeScript, TanStack Router/Query, React Hook Form, Zod, ExcelJS theo phi�
 
 - Sản lượng `DECIMAL(20,6)`, giờ/ngày công `DECIMAL(8,2)`, tiền trung gian `DECIMAL(20,6)`, tiền VND kết quả `DECIMAL(20,0)`; backend BigDecimal, API decimal là chuỗi.
 - Ngày nghiệp vụ DATE, kỳ YYYY-MM; audit timestamp theo convention hệ thống, hiển thị Asia/Ho_Chi_Minh.
-- Tên bảng snake_case số nhiều, mô tả nghiệp vụ đầy đủ; cột FK dùng tên đối tượng như work_type_id, work_entry_id, employee_id. Bảng có audit và version; update yêu cầu expected_version. Trạng thái và chuyển kỳ được kiểm tra tại service, không dùng CRUD generic để bỏ qua nghiệp vụ.
+- Tên bảng snake_case số nhiều, mô tả nghiệp vụ đầy đủ; cột FK dùng tên đối tượng như work_type_id, work_sheet_id, employee_id. Bảng có audit và version; update yêu cầu expected_version. Trạng thái và chuyển kỳ được kiểm tra tại service, không dùng CRUD generic để bỏ qua nghiệp vụ.
 - Cấu hình hiệu lực `[from,to)`, không chồng khoảng trên cùng khóa nghiệp vụ. Snapshot lưu cả nội dung và ID/version.
 - JSON phải có schema_version và DTO validate; không nhận JSON tùy ý hoặc script công thức. Trường dùng filter/index vẫn là cột thường.
 - Mỗi bảng cần chuyển dữ liệu có `legacy_source`, `legacy_id`, `import_batch`, `source_hash`; unique `(legacy_source, legacy_id)` trên từng bảng. Source phân biệt loại bảng cũ khi gộp.
@@ -93,12 +93,12 @@ MVP lưu thiết lập hiện hành trên employees và snapshot đầy đủ tr
 
 | Bảng | Cột nghiệp vụ chính | Ràng buộc/index |
 | --- | --- | --- |
-| `employee_work_entries` | kind `WORK/CRATING`, work_date, work_type_id, shift_code, quantity, unit, reported_hours, note, status | index kind/date/status; type phù hợp kind |
-| `employee_work_allocations` | work_entry_id, employee_id, quantity | unique work_entry/employee; tổng bằng phiếu |
+| `employee_work_sheets` | kind `WORK/CRATING`, work_date, work_type_id, shift_code, quantity, unit, reported_hours, note, status | index kind/date/status; type phù hợp kind |
+| `employee_work_sheet_items` | work_sheet_id, employee_id, quantity | unique work_sheet/employee; tổng bằng phiếu |
 | `employee_time_entries` | employee_id, work_date, slot_code, kind `ATTENDANCE_ADJUSTMENT/OVERTIME`, payable_days_delta, hours, source_refs_json, reason, status | unique employee/date/slot/kind; chỉ trường phù hợp kind được nhập |
 | `employee_pay_items` | employee_id, period, effective_date, kind `INCOME/DEDUCTION`, code, amount, tax_treatment, reason, status, origin_result_id | index employee/period/status |
 
-Phiếu/chi tiết đóng thùng và công việc dùng hai bảng đầu, lọc bằng kind. Vẫn giữ bảng `employee_work_allocations` vì phải lọc/tổng hợp sản lượng theo nhân viên thường xuyên.
+`employee_work_sheets` lưu phiếu tổng; `employee_work_sheet_items` lưu dòng chi tiết sản lượng chia cho từng nhân viên. Công việc và đóng thùng dùng cùng cặp bảng, phân biệt bằng kind. Vẫn giữ bảng `employee_work_sheet_items` vì phải lọc/tổng hợp sản lượng theo nhân viên thường xuyên.
 
 Bảng thời gian gộp công điều chỉnh và tăng ca vì cùng quản lý theo người/ngày/ca. Không đưa nghỉ phép vào bảng này. Chấm công mặc định tính từ lịch và nghỉ, chỉ lưu điều chỉnh có lý do, không sinh dữ liệu công rỗng cho từng ngày.
 
@@ -147,7 +147,7 @@ Không có bảng import_batches/legacy_maps riêng. Mapping legacy nằm trên 
 2. Khóa các nhân viên và kỳ liên quan theo mục 9, kiểm tra kỳ OPEN và version.
 3. Chia lượng cho N người với scale 6; phần dư phân phối theo employee_id tăng dần, bảo toàn tổng. Lưu phiếu và phân bổ cùng transaction.
 4. Sửa phiếu thay toàn bộ chi tiết phân bổ; hủy giữ chi tiết để tra cứu nhưng loại khỏi tính mới. Tăng input_revision và đánh dấu run nháp bị ảnh hưởng STALE.
-5. Chi tiết công việc/đóng thùng đọc `employee_work_allocations` JOIN `employee_work_entries`; không có endpoint update chi tiết.
+5. Chi tiết công việc/đóng thùng đọc `employee_work_sheet_items` JOIN `employee_work_sheets`; không có endpoint update chi tiết.
 
 Giờ tăng ca kho đối chiếu theo người/ngày/ca trong `employee_time_entries`. Nhiều việc một ca chỉ có một bản giờ; cùng giờ thì liên kết thêm nguồn, khác giờ thì báo cần xác nhận. Sửa/hủy nguồn đặt giờ liên quan về trạng thái cần kiểm tra, không tự lấy SUM/MAX. Tăng ca văn phòng nhập riêng qua UI nhưng dùng cùng bảng. Dữ liệu cũ không xác định ca được phải đưa vào báo cáo đối chiếu.
 
@@ -239,8 +239,8 @@ API `/employee-payroll`, paging/ApiResponse theo convention repo, body ghi có e
 | Nhóm API | Thao tác |
 | --- | --- |
 | `/work-types`, `/work-rates` | List/get/create/update; cấu hình có hiệu lực và validate kind |
-| `/work-entries?kind=WORK/CRATING` | List/create/update; `/{id}/confirm`, `/{id}/cancel` |
-| `/work-details?kind=...&employee_id=...` | Chi tiết phân bổ chỉ đọc |
+| `/work-sheets?kind=WORK/CRATING` | List/create/update; `/{id}/confirm`, `/{id}/cancel` |
+| `/work-sheet-items?kind=...&employee_id=...` | Chi tiết phân bổ chỉ đọc |
 | `/attendance`, `/time-entries`, `/pay-items` | Xem bảng công, ghi giờ/điều chỉnh/phát sinh; confirm/cancel |
 | `/leave-entries` | List/create/update nháp; submit/approve/reject/cancel; batch nhiều ngày |
 | `/leave-balances`, `/leave-balances/{id}/transactions` | Ngày phép và lịch sử |
@@ -267,8 +267,8 @@ Công cụ chuyển dữ liệu theo đợt: export chỉ đọc → manifest/st
 | Staff nhóm 2/3 | Map sang employees, phân WAREHOUSE/OFFICE, dùng cột sẵn có và cột bổ sung; nếu trùng nhân viên SALE thì báo xung đột để xử lý, không ghi đè |
 | WhJobCategory/WhJob và loại đóng thùng | `employee_work_types` theo kind/parent |
 | WhCoefficient, giá đóng thùng | `employee_work_rates` |
-| WhQuantity/WhCrating | `employee_work_entries` theo kind; legacy_source phân biệt nguồn |
-| WhQuantityDetail/WhCratingDetail | `employee_work_allocations`, giữ số gốc để đối chiếu |
+| WhQuantity/WhCrating | `employee_work_sheets` theo kind; legacy_source phân biệt nguồn |
+| WhQuantityDetail/WhCratingDetail | `employee_work_sheet_items`, giữ số gốc để đối chiếu |
 | OnLeaveType | Danh mục leave-types có phiên bản đi kèm mã nguồn; giữ mã/nhãn cũ qua mapping |
 | OnLeave | `employee_leave_balances` + `employee_leave_transactions` OPENING/GRANT theo phương án cutover |
 | OnLeaveRegister | `employee_leave_entries`; trạng thái và ảnh hưởng số dư theo quy tắc import |
