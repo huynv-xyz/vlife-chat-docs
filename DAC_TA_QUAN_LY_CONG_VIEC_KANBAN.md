@@ -23,12 +23,12 @@ Ví dụ: `/tasks?view=board&type=BUG&assignee=me&priority=HIGH&task=123`.
 
 - Header gọn: tên trang, tổng số việc phù hợp bộ lọc, nút Tạo công việc.
 - Một thanh lọc dùng chung phong cách CMS: tìm mã/tiêu đề; loại việc; module; người phụ trách; người tạo; ưu tiên; hạn; trạng thái. Có xóa bộ lọc.
-- Lối tắt: Việc của tôi, Tôi đã tạo, Chưa phân công, Quá hạn.
+- Lối tắt: Việc của tôi, Tôi đã tạo, Chờ tôi kiểm tra, Bị từ chối, Chưa phân công, Quá hạn.
 - Năm cột: Tiếp nhận, Cần làm, Đang làm, Chờ kiểm tra, Hoàn thành.
 - Mỗi cột có số lượng đúng theo bộ lọc, tải thêm riêng. Không tải toàn bộ lịch sử một lần.
 - Card: mã, biểu tượng loại việc, tiêu đề tối đa 2 dòng, module, ưu tiên, người phụ trách, hạn, số bình luận/tệp. Hạn quá hạn có cả chữ và màu.
 - Việc bị chặn hiển thị nhãn Cần hỗ trợ + lý do; không tạo thêm cột.
-- Việc hủy/lưu trữ mặc định ẩn. Chọn bộ lọc tương ứng chuyển sang danh sách để xem và khôi phục.
+- Việc Từ chối/Hủy/lưu trữ có bộ lọc riêng và số lượng trên lối tắt; chọn sẽ mở danh sách tương ứng. Kanban chính vẫn giữ năm cột để dễ theo dõi. Thông báo và Tôi đã tạo vẫn truy cập được việc bị từ chối.
 - Kéo thả giữa cột để đổi trạng thái. V1 không kéo thả để sắp xếp tùy ý trong cột; sắp theo ưu tiên giảm dần rồi ngày tạo và ID tăng dần.
 - Luôn có nút Đổi trạng thái thay cho kéo thả, dùng được bằng bàn phím và điện thoại.
 
@@ -72,6 +72,9 @@ Người gửi được đề xuất ưu tiên khi tạo; sau tiếp nhận ch�
 stateDiagram-v2
     [*] --> INBOX: Gửi yêu cầu
     INBOX --> TODO: Tiếp nhận và làm rõ
+    INBOX --> REJECTED: Từ chối, có lý do
+    TODO --> REJECTED: Từ chối trước khi bắt đầu
+    REJECTED --> INBOX: Bổ sung và gửi lại
     TODO --> IN_PROGRESS: Bắt đầu xử lý
     IN_PROGRESS --> REVIEW: Có kết quả cần kiểm tra
     REVIEW --> IN_PROGRESS: Kiểm tra chưa đạt
@@ -82,18 +85,38 @@ stateDiagram-v2
 | Chuyển trạng thái | Điều kiện |
 | --- | --- |
 | Tiếp nhận → Cần làm | Đủ thông tin nghiệp vụ; người điều phối tiếp nhận |
+| Tiếp nhận/Cần làm → Từ chối | Điều phối từ chối, bắt buộc lý do |
+| Từ chối → Tiếp nhận | Người tạo hoặc điều phối bổ sung thông tin và gửi lại, bắt buộc ghi nội dung bổ sung |
 | Cần làm → Đang làm | Có người phụ trách |
 | Đang làm → Chờ kiểm tra | Có kết quả xử lý và hướng dẫn kiểm tra; bỏ cờ bị chặn |
 | Chờ kiểm tra → Hoàn thành | Người tạo hoặc điều phối xác nhận đạt; có môi trường và ngày triển khai |
-| Chờ kiểm tra → Đang làm | Ghi lý do chưa đạt |
+| Chờ kiểm tra → Đang làm | Người tạo hoặc điều phối bấm Yêu cầu sửa lại, bắt buộc lý do chưa đạt |
 | Hoàn thành → Cần làm | Người tạo hoặc điều phối mở lại, ghi lý do; giữ lịch sử hoàn thành cũ |
 | Cần làm → Tiếp nhận; Đang làm → Cần làm | Điều phối điều chỉnh kế hoạch, bắt buộc lý do |
-| Bất kỳ trạng thái chưa hoàn thành → Hủy | Điều phối hủy, ghi lý do; nếu trùng chỉ rõ task gốc |
+| Tiếp nhận/Cần làm/Đang làm/Chờ kiểm tra → Hủy | Điều phối hủy, ghi lý do; nếu trùng chỉ rõ task gốc |
 | Hủy → Tiếp nhận | Điều phối khôi phục, ghi lý do |
 
 Đã hoàn thành không hủy trực tiếp; mở lại trước. Không cho chuyển tắt Tiếp nhận → Hoàn thành. Task bị chặn vẫn giữ trạng thái hiện tại, cờ này chỉ áp dụng cho Cần làm/Đang làm/Chờ kiểm tra và không được hoàn thành khi chưa gỡ chặn.
 
-Lưu trữ chỉ áp dụng cho Hoàn thành/Hủy, chỉ người điều phối; không xóa vật lý. Muốn sửa task đã lưu trữ phải khôi phục trước.
+Lưu trữ chỉ áp dụng cho Hoàn thành/Từ chối/Hủy, chỉ người điều phối; không xóa vật lý. Muốn sửa task đã lưu trữ phải khôi phục trước.
+
+### 3.1. Từ chối, yêu cầu sửa lại và hủy
+
+- **Từ chối (REJECTED):** yêu cầu chưa được chấp nhận thực hiện, ví dụ ngoài phạm vi hoặc không phù hợp nghiệp vụ. Chỉ điều phối được thực hiện tại Tiếp nhận/Cần làm. Modal bắt buộc lý do 5–2.000 ký tự; hiển thị rõ người từ chối, thời điểm và lý do ở đầu chi tiết.
+- **Yêu cầu sửa lại:** kết quả ở Chờ kiểm tra chưa đạt; chuyển về Đang làm với phản hồi cụ thể để người phụ trách tiếp tục. Không chuyển task thành REJECTED.
+- **Hủy (CANCELLED):** dừng yêu cầu đã gửi/đang xử lý hoặc trùng task; giữ lý do và liên kết task gốc nếu trùng.
+- **Cần bổ sung:** nếu chỉ thiếu dữ liệu để đánh giá thì giữ Tiếp nhận, trao đổi qua bình luận; chưa cần từ chối.
+- Người tạo được sửa mô tả/thông tin lỗi/tiêu chí nghiệm thu khi bị từ chối, rồi bấm **Gửi lại** kèm giải thích phần đã bổ sung. Vẫn cùng mã task, chuyển về Tiếp nhận; không tự vào Cần làm.
+- Gửi lại xóa người phụ trách và hạn cũ để điều phối đánh giá lại; lịch sử vẫn giữ phân công/hạn/lý do cũ. Nếu đã lưu trữ, điều phối phải khôi phục trước.
+- Task đang Đang làm/Chờ kiểm tra muốn dừng dùng Hủy, không từ chối hồi tố. REJECTED chỉ chuyển về INBOX qua Gửi lại; không chuyển tắt sang DONE.
+
+### 3.2. Theo dõi trạng thái
+
+- Trong Tôi đã tạo, người gửi thấy trạng thái hiện tại, người đang xử lý, hạn và lần cập nhật gần nhất.
+- Chi tiết có thanh tiến độ năm bước và nhật ký chuyển trạng thái: từ đâu → đâu, ai thực hiện, thời điểm, lý do. Từ chối/Hủy hiển thị nhãn riêng cùng lý do, không tô thành Hoàn thành.
+- Có các nút đúng ngữ cảnh: Tiếp nhận, Bắt đầu, Gửi kiểm tra, Xác nhận hoàn thành, Yêu cầu sửa lại, Từ chối, Gửi lại, Mở lại. Nút chỉ hiện khi người dùng đủ quyền và trạng thái hợp lệ.
+- Chờ tôi kiểm tra gồm task REVIEW do tôi tạo; điều phối có thể xem mọi REVIEW qua bộ lọc. Không gửi toàn bộ task chờ kiểm tra cho mọi người.
+- Trạng thái và bình luận được làm mới khi quay lại tab và định kỳ 30 giây khi đang xem trang; không tự ghi đè form chưa lưu. Khi phiên bản đổi, hiện nhắc tải dữ liệu mới.
 
 ## 4. Phân quyền
 
@@ -102,10 +125,10 @@ V1 là bảng chung nội bộ: người có quyền xem module thấy mọi tas
 | Quyền | Phạm vi |
 | --- | --- |
 | tasks.view | Xem bảng, chi tiết, lịch sử đã lọc, tải tệp |
-| tasks.create | Gửi yêu cầu; sửa mô tả nghiệp vụ task mình tạo khi còn Tiếp nhận |
+| tasks.create | Gửi yêu cầu; sửa mô tả nghiệp vụ task mình tạo khi còn Tiếp nhận/Từ chối và gửi lại yêu cầu bị từ chối |
 | tasks.update | Người được giao cập nhật kết quả, cờ chặn, chuyển Đang làm/Chờ kiểm tra của việc mình phụ trách |
 | tasks.comment | Thêm bình luận/tệp; sửa hoặc ẩn bình luận của chính mình |
-| tasks.manage | Điều phối: sửa nội dung/ưu tiên/hạn, giao việc, chuyển trạng thái, nghiệm thu, hủy, lưu trữ và kiểm duyệt bình luận/tệp |
+| tasks.manage | Điều phối: sửa nội dung/ưu tiên/hạn, giao việc, chuyển trạng thái, nghiệm thu, từ chối, hủy, lưu trữ và kiểm duyệt bình luận/tệp |
 
 Mọi quyền thao tác cần kèm tasks.view. Người tạo có tasks.create được nghiệm thu, trả lại hoặc mở lại chính task mình tạo. Điều phối có thể nghiệm thu thay. Người được giao không tự nghiệm thu trừ khi đồng thời là người tạo hoặc có tasks.manage.
 
@@ -116,14 +139,43 @@ Gán quyền qua roles/permissions hiện tại, không thêm hệ vai trò riê
 - Dùng tài khoản CMS (`users`) làm người tạo/người phụ trách; thông tin nhân viên lấy qua liên kết `users.employee_id` nếu cần. Không tạo hồ sơ nhân sự mới.
 - Không tự giao lại việc khi tài khoản bị khóa; giữ tên lịch sử, hiển thị Tài khoản ngừng hoạt động và cho điều phối giao lại.
 - Thời gian hiển thị theo Asia/Ho_Chi_Minh; ngày dd/mm/yyyy, thời điểm dd/mm/yyyy HH:mm.
-- Quá hạn: hạn nhỏ hơn ngày hiện tại, task chưa Hoàn thành/Hủy và chưa lưu trữ. Hôm nay chưa tính quá hạn.
+- Quá hạn: hạn nhỏ hơn ngày hiện tại, task chưa Hoàn thành/Từ chối/Hủy và chưa lưu trữ. Hôm nay chưa tính quá hạn.
 - Kéo thả sai điều kiện phải mở form bổ sung hoặc giải thích cụ thể; hủy form thì card trở lại vị trí cũ.
 - Hai người sửa cùng lúc: báo dữ liệu đã thay đổi và tải lại, không âm thầm ghi đè.
 - Mạng lỗi khi chuyển cột: hoàn nguyên card; không báo thành công giả.
 - Bộ đếm, dữ liệu danh sách và Kanban dùng cùng bộ lọc. Phân trang danh sách dùng component chung CMS.
 - Nội dung không được tự thực thi HTML/script; liên kết và tệp phải kiểm tra quyền khi mở.
 
-## 6. Tiêu chí nghiệm thu V1
+## 6. Thông báo trong CMS
+
+### 6.1. Giao diện
+
+- Chuông thông báo dùng chung trên header CMS, có số chưa đọc (99+ khi vượt 99). Popover xem thông báo gần nhất; trang `/notifications` xem tất cả, lọc Tất cả/Chưa đọc.
+- Mỗi thông báo có mã task, tiêu đề, diễn biến, người thực hiện và thời gian. Ví dụ: “TASK-123 được yêu cầu sửa lại bởi …”. Không nhét mô tả lỗi dài hoặc dữ liệu nhạy cảm vào thông báo.
+- Bấm mở đúng modal task và đánh dấu đã đọc; có Đánh dấu đã đọc/Chưa đọc và Đọc tất cả. Mở popover đơn thuần không đánh dấu toàn bộ đã đọc.
+- Nội dung event là trạng thái tại thời điểm phát sinh; khi mở task phải lấy trạng thái hiện tại, không lấy status cũ trong noti làm trạng thái thật.
+- Không có quyền hoặc task không còn truy cập được thì hiện thông báo phù hợp; không lộ thông tin qua bản preview cũ.
+- Cập nhật ngay sau thao tác của chính phiên làm việc và polling 30 giây khi tab hiển thị; refresh khi focus. V1 là thông báo trong app, chưa gửi email/mobile push.
+
+### 6.2. Ai nhận thông báo
+
+Luôn loại người vừa thực hiện thao tác, loại người bị khóa/không còn quyền xem và gộp người trùng trong cùng sự kiện.
+
+| Sự kiện | Người nhận |
+| --- | --- |
+| Tạo yêu cầu mới | Người điều phối có tasks.manage + view, trừ người tạo |
+| Gửi lại sau từ chối | Người điều phối có tasks.manage + view |
+| Giao/đổi người phụ trách | Người phụ trách mới, người phụ trách cũ và người tạo |
+| Chuyển Cần làm/Đang làm; đổi hạn/ưu tiên; chặn/gỡ chặn | Người tạo và người phụ trách |
+| Chuyển Chờ kiểm tra | Người tạo; nếu người tạo không còn active/quyền xem thì gửi điều phối |
+| Từ chối hoặc Hủy | Người tạo và người phụ trách |
+| Yêu cầu sửa lại | Người phụ trách và người tạo |
+| Hoàn thành hoặc mở lại | Người tạo và người phụ trách |
+| Bình luận mới hoặc thêm tệp | Người tạo và người phụ trách |
+
+Không tạo noti cho sửa chính tả tiêu đề/mô tả, sửa/gỡ bình luận, tải tệp hoặc đánh dấu đã đọc. Không gửi lặp cho toàn bộ người từng bình luận. Tạm chưa nhắc hạn tự động; bộ lọc Quá hạn đáp ứng V1.
+
+## 7. Tiêu chí nghiệm thu V1
 
 1. Tạo báo lỗi/tính năng nhanh, mã duy nhất, retry gửi không sinh việc trùng.
 2. F5 giữ view, bộ lọc và task đang mở; nút Back đóng chi tiết trở lại bảng.
@@ -134,8 +186,11 @@ Gán quyền qua roles/permissions hiện tại, không thêm hệ vai trò riê
 7. Tài khoản khóa vẫn hiển thị trên việc cũ nhưng không được chọn giao việc mới.
 8. UI dùng được ở desktop/mobile, cuộn từng cột, bàn phím và nút chuyển trạng thái hoạt động.
 9. Trạng thái rỗng, lỗi tải, lưu thất bại và xung đột đều có hướng xử lý rõ ràng.
-10. Không thay đổi nghiệp vụ lương, bán hàng, kho, vl-app hoặc vl-desktop.
+10. Từ chối bắt buộc lý do; gửi lại giữ nguyên mã task và đầy đủ lịch sử; người không có quyền không được reject.
+11. Thông báo đúng người, không gửi cho người thực hiện; retry không nhân đôi; đã đọc/chưa đọc lưu trên server và đồng bộ sau F5.
+12. Bấm thông báo mở đúng task, kể cả Từ chối/Hoàn thành; không có quyền thì giải thích và không lộ dữ liệu.
+13. Không thay đổi nghiệp vụ lương, bán hàng, kho, vl-app hoặc vl-desktop.
 
-## 7. Ngoài V1
+## 8. Ngoài V1
 
-Nhiều bảng/dự án, sprint, subtask/checklist, nhãn tự tạo, nhiều người phụ trách, thứ tự kéo thả trong cột, thông báo email/push, @mention, tự đồng bộ PR, tự đóng task khi deploy, SLA và báo cáo năng suất. Chỉ bổ sung khi có nhu cầu thực tế.
+Nhiều bảng/dự án, sprint, subtask/checklist, nhãn tự tạo, nhiều người phụ trách, thứ tự kéo thả trong cột, thông báo email/mobile push, @mention, tự đồng bộ PR, tự đóng task khi deploy, SLA và báo cáo năng suất. Chỉ bổ sung khi có nhu cầu thực tế.
