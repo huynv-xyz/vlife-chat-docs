@@ -163,12 +163,14 @@ Người dùng chọn kỳ, tính thử, xem lỗi và chi tiết từng khoản
 ## 5. Hướng triển khai
 
 - Tạo nhóm menu **Lương kho và văn phòng** với các chức năng ở mục 1; giữ cách gọi Công việc, Chi tiết công việc, Đóng thùng, Chi tiết đóng thùng để người dùng nhận biết.
-- Bảng mới đặt tên đầy đủ theo nghiệp vụ: employee_work_types, employee_work_entries, employee_leave_balances, staff_payroll_results…; backend kho/văn phòng có module riêng. Không gọi service hoặc ghi bảng kết quả lương sale.
-- Dùng bảng employees và giao diện/API nhân viên hiện có. Tận dụng lương cơ bản, lương đóng bảo hiểm, người phụ thuộc, ngày vào/nghỉ việc; bổ sung nhóm lương, lương quỹ, chi tiết phụ cấp và trường cấu hình còn thiếu. Không tạo bảng hồ sơ nhân viên riêng.
+- Bảng mới đặt tên đầy đủ theo nghiệp vụ: employee_work_types, employee_work_entries, employee_leave_balances, employee_payroll_results…; backend kho/văn phòng có module riêng. Không gọi service hoặc ghi bảng kết quả lương sale.
+- Dùng bảng employees và giao diện/API nhân viên hiện có. Tận dụng lương cơ bản, lương đóng bảo hiểm, người phụ thuộc, ngày vào/nghỉ việc; bổ sung payroll_group, salary_fund, payroll_allowances, payroll_effective_from và version nếu chưa có. Không tạo bảng hồ sơ nhân viên riêng.
 - Phân nhóm SALE/WAREHOUSE/OFFICE và lọc đối tượng ở luồng sale: code hiện lấy cả nhân viên có mức lương khác 0. Cần backfill/đối soát trước bật bộ lọc để vừa không tính kho/văn phòng vào sale, vừa không bỏ sót nhân viên sale. Công thức và kết quả hai luồng vẫn riêng.
 - Hai bộ tính kho/văn phòng dùng chung nền tảng công/phép và lưu phiên trong module mới, mỗi bộ có công thức riêng.
-- Thiết kế rút gọn 14 bảng mới và mở rộng employees trong TDD: 3 bảng danh mục/cấu hình, 4 bảng đầu vào công/lương, 3 bảng nghỉ/ngày phép, 4 bảng kỳ/kết quả/nhật ký. Công việc và đóng thùng dùng chung bảng có loại, giao diện vẫn tách như cũ.
-- Dùng số thập phân, cấu hình đơn giá có hiệu lực, nhật ký và kiểm soát sửa đồng thời. Snapshot và breakdown lưu cùng kết quả nhân viên; không tạo bảng riêng cho từng lớp dữ liệu phụ.
+- Thiết kế rút gọn 12 bảng mới và mở rộng employees trong TDD: 2 bảng danh mục/đơn giá, 4 bảng đầu vào công/lương, 3 bảng nghỉ/ngày phép, 3 bảng kỳ/kết quả, dùng audit_logs hiện có. Công việc và đóng thùng dùng chung bảng có loại, giao diện vẫn tách như cũ.
+- Không tạo bảng settings tổng quát. Danh mục ngày lễ/loại phép và quy tắc tính bám dữ liệu cũ đã đối chiếu, lưu thành tài nguyên có phiên bản đi kèm mã nguồn; chưa có UI sửa trực tiếp. Thay đổi phải được cập nhật và kiểm thử theo phiên bản.
+- Dùng AuditService/AuditLogDao và bảng audit_logs hiện có, bổ sung module/quyền xem log lương; không tạo bảng nhật ký riêng.
+- Dùng số thập phân, đơn giá có hiệu lực, nhật ký và kiểm soát sửa đồng thời bằng hàng nhân viên, kỳ lương và số dư phép. Snapshot và breakdown lưu cùng kết quả nhân viên; không tạo bảng riêng cho từng lớp dữ liệu phụ.
 - Các điểm khác mã cũ như làm tròn, chống trùng giờ tăng ca hoặc ngoại lệ thủ kho cần có mẫu đối chiếu và được ghi nhận trước vận hành.
 
 ## 6. Lộ trình và bàn giao
