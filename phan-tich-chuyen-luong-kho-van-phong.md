@@ -163,6 +163,7 @@ Người dùng chọn kỳ, tính thử, xem lỗi và chi tiết từng khoản
 ## 5. Hướng triển khai
 
 - Tạo nhóm menu **Lương kho và văn phòng** với các chức năng ở mục 1; giữ cách gọi Công việc, Chi tiết công việc, Đóng thùng, Chi tiết đóng thùng để người dùng nhận biết.
+- Quy ước tên: sheets/items cho phiếu công việc và dòng chi tiết; records cho công/tăng ca; requests cho đơn nghỉ; adjustments cho khoản thu nhập/khấu trừ phát sinh (`employee_pay_adjustments`). Không dùng cùng một hậu tố cho mọi bảng.
 - Bảng mới đặt tên đầy đủ theo nghiệp vụ: employee_work_types, employee_work_sheets, employee_leave_balances, employee_payroll_results…; backend kho/văn phòng có module riêng. Không gọi service hoặc ghi bảng kết quả lương sale.
 - Dùng bảng employees và giao diện/API nhân viên hiện có. Tận dụng lương cơ bản, lương đóng bảo hiểm, người phụ thuộc, ngày vào/nghỉ việc; bổ sung payroll_group, salary_fund, payroll_allowances, payroll_effective_from và version nếu chưa có. Không tạo bảng hồ sơ nhân viên riêng.
 - Phân nhóm SALE/WAREHOUSE/OFFICE và lọc đối tượng ở luồng sale: code hiện lấy cả nhân viên có mức lương khác 0. Cần backfill/đối soát trước bật bộ lọc để vừa không tính kho/văn phòng vào sale, vừa không bỏ sót nhân viên sale. Công thức và kết quả hai luồng vẫn riêng.
