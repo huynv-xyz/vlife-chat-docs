@@ -164,9 +164,10 @@ Người dùng chọn kỳ, tính thử, xem lỗi và chi tiết từng khoản
 
 - Tạo nhóm menu **Lương kho và văn phòng** với các chức năng ở mục 1; giữ cách gọi Công việc, Chi tiết công việc, Đóng thùng, Chi tiết đóng thùng để người dùng nhận biết.
 - Backend và bảng dữ liệu mới có namespace riêng. Không gọi service hoặc ghi bảng kết quả lương sale.
-- Liên kết định danh nhân viên qua mapping; thiết lập lương, phụ cấp, thuế/bảo hiểm và lịch sử kho/văn phòng lưu riêng.
+- Dùng bảng employees và giao diện/API nhân viên hiện có. Tận dụng lương cơ bản, lương đóng bảo hiểm, người phụ thuộc, ngày vào/nghỉ việc; bổ sung nhóm lương, lương quỹ, chi tiết phụ cấp và trường cấu hình còn thiếu. Không tạo bảng hồ sơ nhân viên riêng.
+- Phân nhóm SALE/WAREHOUSE/OFFICE và lọc đối tượng ở luồng sale: code hiện lấy cả nhân viên có mức lương khác 0. Cần backfill/đối soát trước bật bộ lọc để vừa không tính kho/văn phòng vào sale, vừa không bỏ sót nhân viên sale. Công thức và kết quả hai luồng vẫn riêng.
 - Hai bộ tính kho/văn phòng dùng chung nền tảng công/phép và lưu phiên trong module mới, mỗi bộ có công thức riêng.
-- Thiết kế rút gọn 15 bảng trong TDD: 4 bảng hồ sơ/cấu hình, 4 bảng đầu vào công/lương, 3 bảng nghỉ/ngày phép, 4 bảng kỳ/kết quả/nhật ký. Công việc và đóng thùng dùng chung bảng có loại, giao diện vẫn tách như cũ.
+- Thiết kế rút gọn 14 bảng mới và mở rộng employees trong TDD: 3 bảng danh mục/cấu hình, 4 bảng đầu vào công/lương, 3 bảng nghỉ/ngày phép, 4 bảng kỳ/kết quả/nhật ký. Công việc và đóng thùng dùng chung bảng có loại, giao diện vẫn tách như cũ.
 - Dùng số thập phân, cấu hình đơn giá có hiệu lực, nhật ký và kiểm soát sửa đồng thời. Snapshot và breakdown lưu cùng kết quả nhân viên; không tạo bảng riêng cho từng lớp dữ liệu phụ.
 - Các điểm khác mã cũ như làm tròn, chống trùng giờ tăng ca hoặc ngoại lệ thủ kho cần có mẫu đối chiếu và được ghi nhận trước vận hành.
 

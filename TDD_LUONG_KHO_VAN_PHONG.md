@@ -1,6 +1,6 @@
 # TDD — Lương kho, văn phòng, nghỉ phép và ngày phép
 
-Cập nhật: 17/10/2026. Phiên bản 1.1 — rút gọn toàn bộ mô hình dữ liệu. Trạng thái: thiết kế đề xuất, chưa triển khai schema/code.
+Cập nhật: 17/10/2026. Phiên bản 1.2 — rút gọn toàn bộ mô hình dữ liệu. Trạng thái: thiết kế đề xuất, chưa triển khai schema/code.
 
 Nghiệp vụ: [Phân tích chuyển chức năng cũ](phan-tich-chuyen-luong-kho-van-phong.md).
 
@@ -10,21 +10,21 @@ Chuyển chức năng cũ: hồ sơ lương, Công việc/Chi tiết công việ
 
 Nhập sản lượng qua phiếu công việc/đóng thùng. Không tích hợp sổ kho trong đợt này. Module độc lập với lương sale: không gọi pipeline sale, không ghi `payrolls`, không dùng các màn hình/cấu hình lương sale.
 
-Namespace đề xuất `staffpay`, bảng `sp_`, API và route `/staff-payroll`. Liên kết định danh qua `employees.id`; tham số lương kho/văn phòng lưu riêng.
+Namespace đề xuất `staffpay`, bảng `sp_`, API và route `/staff-payroll`. Dùng lại bảng `employees` và màn hình/API nhân viên hiện có; bổ sung cột còn thiếu theo thiết kế mục 5.1. Không tạo bảng hồ sơ nhân viên thứ hai.
 
 ## 2. Kết quả rà soát thiết kế
 
-Bản trước chia 35 bảng cho cả những dữ liệu luôn đọc/ghi cùng nhau. Bản này giảm còn **15 bảng**, giữ chi tiết quan hệ ở chỗ cần báo cáo theo nhân viên và dùng JSON có cấu trúc cho cấu hình/snapshot.
+Bản trước chia 35 bảng cho cả những dữ liệu luôn đọc/ghi cùng nhau. Bản này giảm còn **14 bảng mới và mở rộng `employees`**, giữ chi tiết quan hệ ở chỗ cần báo cáo theo nhân viên và dùng JSON có cấu trúc cho cấu hình/snapshot.
 
 | Mục | Trước | Sau | Cách gộp |
 | --- | ---: | ---: | --- |
-| 5.1 Hồ sơ, lịch, cấu hình | 10 | 4 | Phụ cấp trong hồ sơ; lịch trong cấu hình; danh mục và đơn giá dùng chung cho công việc/đóng thùng |
+| 5.1 Hồ sơ, lịch, cấu hình | 10 | 3 | Dùng employees; thêm cột thiếu; lịch trong cấu hình; danh mục và đơn giá dùng chung |
 | 5.2 Đầu vào tính lương | 7 | 4 | Phiếu công việc/đóng thùng chung bảng; phân bổ chung bảng; công/tăng ca chung bảng |
 | 5.3 Nghỉ phép/ngày phép | 8 | 3 | Loại phép trong cấu hình; một bản nghỉ theo ngày; số dư và giao dịch phép riêng |
 | 5.4 Kết quả và lịch sử | 10 | 4 | Snapshot/breakdown/lỗi nằm trong phiên/kết quả; provenance import nằm trên bản ghi |
-| Tổng | 35 | 15 | Không tạo bảng giữ chỗ nghỉ, lô phép hoặc điều phối cấu hình riêng |
+| Tổng | 35 | 14 | Không tạo bảng giữ chỗ nghỉ, lô phép hoặc điều phối cấu hình riêng |
 
-Giữ 15 bảng vì hồ sơ, dữ liệu công, số dư phép và kết quả lương có vòng đời khác nhau. Không đưa tất cả vào một bảng JSON tổng hợp. Số màn hình không quyết định số bảng: Công việc và Đóng thùng vẫn là hai màn hình dù dùng chung cấu trúc lưu trữ.
+Giữ 14 bảng mới cho danh mục, dữ liệu công, số dư phép và kết quả lương; hồ sơ nhân viên dùng employees hiện có. Không đưa tất cả vào một bảng JSON tổng hợp. Số màn hình không quyết định số bảng: Công việc và Đóng thùng vẫn là hai màn hình dù dùng chung cấu trúc lưu trữ.
 
 ## 3. Tổ chức mã
 
@@ -50,18 +50,36 @@ React/TypeScript, TanStack Router/Query, React Hook Form, Zod, ExcelJS theo phi�
 - Các thao tác tạo có request_key: lưu khóa này trên bản ghi đích và unique theo loại thao tác. Batch dùng batch_key + số thứ tự phần tử; movements dùng event_key. Retry cùng khóa nhưng khác payload phải báo xung đột.
 - Bản ghi đã tham gia lương không hard delete; hủy/ngừng hiệu lực và giữ lịch sử.
 
-## 5. Mô hình dữ liệu — 15 bảng
+## 5. Mô hình dữ liệu — 14 bảng mới và mở rộng employees
 
-### 5.1. Hồ sơ, lịch và cấu hình — 4 bảng
+### 5.1. Dùng lại employees; thêm 3 bảng danh mục/cấu hình
 
 | Bảng | Nội dung | Khóa/ràng buộc |
 | --- | --- | --- |
-| `sp_employee_profiles` | employee_id, payroll_group, effective_from/to, employment_from/to, base_salary, salary_fund, insurance_base, dependent_count, allowances_json, config_code | index employee/effective; không chồng hiệu lực |
 | `sp_activity_types` | code, name, kind `CATEGORY/WORK/CRATING`, parent_id, unit, rate_scope `CATEGORY/ITEM`, active | unique code; parent của WORK chỉ là CATEGORY; không chu trình |
 | `sp_activity_rates` | activity_type_id, day_shift_type, price, coefficient, divisor, effective_from/to | FK type; không chồng hiệu lực theo type/ca; divisor > 0 |
 | `sp_settings` | code, kind `PAYROLL/CALENDAR/LEAVE_TYPE/SYSTEM`, effective_from/to, payload_json, status, version | index code/effective; cấu hình đã dùng được version hóa |
 
-**Hồ sơ:** phụ cấp là danh sách `{code, amount, treatment, tax_treatment}` trong allowances_json. Treatment gồm IN_DAY_BASE/ADD_GROSS/DEDUCTION_ONLY; code không trùng trong một hồ sơ. Không cần bảng phụ cấp riêng vì luôn lưu cùng phiên hồ sơ.
+**Hồ sơ dùng lại `employees`:** đã xác minh từ `Employee.java` các cột `code`, `name`, `labor_type`, `basic_salary`, `allowance_salary`, `insurance_base`, `dependent_count`, `personal_insurance_from/to`, `personal_bhxh/bhyt/bhtn/kpcd`, `joined_at`, `left_at`, `status`. Dùng lại cột đúng ý nghĩa; không sao chép sang bảng sp_. Trong công thức, base_salary ánh xạ tới employees.basic_salary; ngày vào/nghỉ việc dùng joined_at/left_at.
+
+Cột đề xuất bổ sung vào employees (phải kiểm tra schema DB trước migration):
+
+| Cột | Kiểu đề xuất | Mục đích |
+| --- | --- | --- |
+| `payroll_group` | VARCHAR(20) nullable trong giai đoạn chuyển | SALE/WAREHOUSE/OFFICE; một nhóm tính lương hiện hành mỗi nhân viên |
+| `salary_fund` | DECIMAL(20,6) NOT NULL DEFAULT 0 | Lương quỹ văn phòng chưa có trường tương ứng |
+| `staff_pay_allowances` | JSON nullable | Chi tiết phụ cấp kho/văn phòng `{code, amount, treatment, tax_treatment}` |
+| `staff_pay_config_code` | VARCHAR(100) nullable | Chọn bộ cấu hình kho/văn phòng trong sp_settings |
+| `staff_pay_effective_from` | DATE nullable | Ngày bắt đầu áp dụng thiết lập kho/văn phòng hiện hành |
+| `version` | BIGINT NOT NULL DEFAULT 0, nếu chưa có | Kiểm soát sửa đồng thời trên hồ sơ dùng chung |
+
+Phụ cấp JSON phải validate code duy nhất, số tiền và treatment IN_DAY_BASE/ADD_GROSS/DEDUCTION_ONLY. `allowance_salary` hiện là tổng phụ cấp dùng ở sale; với kho/văn phòng chi tiết staff_pay_allowances là nguồn tính, không cộng thêm allowance_salary vào gross. Không tự chuyển tổng allowance_salary thành phụ cấp ăn/đồng phục/điện thoại khi chưa có mapping.
+
+`payroll_group` là nhóm lương, không dùng thay `labor_type` (loại lao động). Nhân viên chưa phân nhóm phải xuất hiện trong báo cáo cần xử lý trước vận hành. MVP chưa hỗ trợ đồng thời nhiều nhóm hoặc chuyển nhóm giữa tháng.
+
+**Tác động cần xử lý trên lương sale:** `PayrollService.aggregateScopes` hiện UNION cả nhân viên status=1 có basic_salary/allowance_salary/insurance_base khác 0. Khi bổ sung nhân viên kho/văn phòng vào employees, phải lọc nhóm SALE ở tập nhân viên cuối cùng của luồng sale; rà soát các bước upstream và truy vấn tính theo nhân viên khác để không kéo kho/văn phòng vào ngân sách/kết quả sale. Không thay công thức sale hoặc đưa kết quả kho/văn phòng vào bảng sale.
+
+Migration phân nhóm theo dữ liệu đã đối chiếu, không mặc định mọi nhân viên là SALE. Bật lọc SALE sau khi backfill đầy đủ và so sánh tập nhân viên/kết quả sale trước/sau. Đây là điều chỉnh bắt buộc để dùng chung employees an toàn, nằm trong phạm vi triển khai.
 
 **Danh mục:** cùng bảng chứa nhóm việc, công việc và loại đóng thùng. Phiếu trỏ đến WORK hoặc CRATING; nhóm việc lấy từ parent. Đơn giá nhóm việc áp theo CATEGORY khi rate_scope=CATEGORY; áp theo WORK khi rate_scope=ITEM. Không fallback âm thầm giữa hai cách. Đóng thùng dùng coefficient=1, divisor=1; công việc giữ divisor cấu hình, mẫu cũ là 1000.
 
@@ -69,7 +87,7 @@ React/TypeScript, TanStack Router/Query, React Hook Form, Zod, ExcelJS theo phi�
 
 Một bản SYSTEM code `MODULE_LOCK` dùng làm hàng khóa giao dịch module (mục 9), không tạo bảng config_state. Không hiển thị/sửa hàng này qua UI cấu hình.
 
-Hồ sơ lương trong MVP thay đổi hiệu lực đầu tháng; vào/nghỉ việc có thể giữa tháng. Đổi nhóm hoặc tham số lương giữa tháng chưa có quy tắc được duyệt thì báo lỗi trước chốt. Hồ sơ đã lưu kết quả không bị thay thế bằng dữ liệu sale.
+MVP lưu thiết lập hiện hành trên employees và snapshot đầy đủ trên từng kết quả lương. Thay đổi thiết lập có hiệu lực đầu tháng, lưu before/after và ngày hiệu lực trong audit; không hỗ trợ đặt nhiều phiên tương lai trên một hàng employees. Kỳ cũ lấy snapshot của lần tính tương ứng khi cần đối chiếu/tính lại, không tự lấy lương hiện tại. Nếu kỳ cũ chưa có snapshot thì yêu cầu nhập/khôi phục bộ đầu vào lịch sử được xác nhận trước khi tính. Vào/nghỉ việc vẫn có thể giữa tháng; chuyển nhóm giữa tháng chưa hỗ trợ thì báo lỗi.
 
 ### 5.2. Công việc, đóng thùng, công và phát sinh — 4 bảng
 
@@ -210,7 +228,7 @@ API `/staff-payroll`, paging/ApiResponse theo convention repo, body ghi có expe
 
 | Nhóm API | Thao tác |
 | --- | --- |
-| `/profiles`, `/activity-types`, `/activity-rates`, `/settings` | List/get/create/update; cấu hình có hiệu lực và validate kind |
+| `/activity-types`, `/activity-rates`, `/settings` | List/get/create/update; cấu hình có hiệu lực và validate kind |
 | `/activities?kind=WORK/CRATING` | List/create/update; `/{id}/confirm`, `/{id}/cancel` |
 | `/activity-details?kind=...&employee_id=...` | Chi tiết phân bổ chỉ đọc |
 | `/attendance`, `/time-entries`, `/pay-items` | Xem bảng công, ghi giờ/điều chỉnh/phát sinh; confirm/cancel |
@@ -224,6 +242,8 @@ API `/staff-payroll`, paging/ApiResponse theo convention repo, body ghi có expe
 
 List/detail dùng GET, create và hành động dùng POST, update dùng PUT /{id}. Các API danh mục không cho sửa trạng thái nghiệp vụ trực tiếp. Mã lỗi: PERIOD_LOCKED, VERSION_CONFLICT, LEAVE_OVERLAP, INSUFFICIENT_LEAVE, MISSING_RATE, AMBIGUOUS_OVERTIME, STALE_RUN, INVALID_PROFILE.
 
+Hồ sơ nhân viên tiếp tục dùng `/employees` và feature `employee` hiện có, bổ sung filter payroll_group và các trường mới; không tạo CRUD `/staff-payroll/profiles`. DTO create/update chỉ cập nhật các trường được phép theo nhóm/quyền, trường không gửi giữ nguyên để UI cũ không xóa dữ liệu mới. Mọi đường sửa employees có ảnh hưởng lương kho/văn phòng (kể cả import và API cũ) phải gọi hook kiểm tra kỳ/version, audit và làm STALE theo mục 9. Thay đổi nhân viên SALE kiểm thử hồi quy theo hành vi hiện tại.
+
 UI giữ tên quen thuộc: Nhân viên; Công việc; Chi tiết công việc; Đóng thùng; Chi tiết đóng thùng; Chấm công; Tăng ca; Phát sinh; Nghỉ phép; Ngày phép; Cấu hình; Lương kho; Lương văn phòng. Hai màn hình công việc/đóng thùng gọi chung API với kind khác nhau. Không cần màn hình cho từng bảng DB.
 
 Query key bắt đầu staff-payroll. Decimal giữ dạng chuỗi, backend là nguồn tính chính thức. Phiếu in dùng snapshot run; bảng năm chỉ cộng current_run FINALIZED của mỗi kỳ, không đếm phiên cũ. Quyền tách view/manage/confirm cho đầu vào; leave.approve, leave.balance.manage, config.manage, payroll.view/calculate/finalize/reopen/export. Scope nhân viên/nhóm áp dụng cả list/detail/export.
@@ -234,7 +254,7 @@ Công cụ chuyển dữ liệu theo đợt: export chỉ đọc → manifest/st
 
 | Nguồn entity cũ | Đích |
 | --- | --- |
-| Staff nhóm 2/3 | employees định danh + profiles; không sửa thông số lương sale |
+| Staff nhóm 2/3 | Map sang employees, phân WAREHOUSE/OFFICE, dùng cột sẵn có và cột bổ sung; nếu trùng nhân viên SALE thì báo xung đột để xử lý, không ghi đè |
 | WhJobCategory/WhJob và loại đóng thùng | activity_types theo kind/parent |
 | WhCoefficient, giá đóng thùng | activity_rates |
 | WhQuantity/WhCrating | activities theo kind; legacy_source phân biệt nguồn |
@@ -259,7 +279,9 @@ Nếu dùng OPENING, nghỉ trước ngày chuyển chỉ tra cứu và không g
 - Hủy phép năm đã chuyển/hết hạn bị chặn đến khi có điều chỉnh được xác nhận.
 - Sửa nguồn trong lúc tính → STALE; chốt và sửa đồng thời không cùng vượt kiểm tra kỳ; FAILED không được chốt.
 - Snapshot/breakdown JSON validate schema và hiển thị lại đúng dù cấu hình đã đổi; tổng phiếu in = tổng cột kết quả.
-- Run mới không xóa phiên cũ; bảng năm không cộng hai lần; dữ liệu sale không thay đổi.
+- Run mới không xóa phiên cũ; bảng năm không cộng hai lần; dữ liệu/kết quả sale không thay đổi khi chạy kho/văn phòng.
+- Thêm nhân viên WAREHOUSE/OFFICE có basic_salary/insurance_base > 0 không làm họ xuất hiện trong luồng sale; backfill nhóm không loại nhầm nhân viên sale hiện hữu.
+- Update employees qua API/UI cũ không xóa cột mới; sửa lương tạo STALE đúng kỳ; kỳ cũ dùng snapshot, không dùng lương mới. Kiểm tra quyền sửa trường lương và optimistic locking.
 - Import hai lần không trùng; opening không trừ lịch sử; thiếu mapping báo lỗi.
 - API trực tiếp không có quyền/sai scope bị chặn, bao gồm xuất bảng lương.
 
@@ -267,7 +289,7 @@ Unit test calculator bằng fixture kế toán duyệt; integration test transac
 
 ## 13. Lộ trình
 
-1. Chốt fixture và mapping; tạo 15 bảng, namespace API/UI và quyền.
+1. Chốt fixture và mapping; mở rộng employees và tạo 14 bảng; cập nhật API/UI nhân viên, phân nhóm và lọc đối tượng sale trước khi nhập dữ liệu kho/văn phòng.
 2. Hồ sơ/cấu hình, công việc/đóng thùng và chi tiết, calculator kho để demo.
 3. Nghỉ phép/ngày phép, công/tăng ca/phát sinh, snapshot/khóa kỳ và in/xuất; hoàn thiện kho.
 4. Calculator/giao diện văn phòng, đối chiếu từng khoản.
