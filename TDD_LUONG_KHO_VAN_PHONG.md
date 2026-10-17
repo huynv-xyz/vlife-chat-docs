@@ -1,6 +1,6 @@
 # TDD — Lương kho, văn phòng, nghỉ phép và ngày phép
 
-Cập nhật: 17/10/2026. Phiên bản 1.6 — rút gọn toàn bộ mô hình dữ liệu. Trạng thái: thiết kế đề xuất, chưa triển khai schema/code.
+Cập nhật: 17/10/2026. Phiên bản 1.7 — rút gọn toàn bộ mô hình dữ liệu. Trạng thái: thiết kế đề xuất, chưa triển khai schema/code.
 
 Nghiệp vụ: [Phân tích chuyển chức năng cũ](phan-tich-chuyen-luong-kho-van-phong.md).
 
@@ -10,7 +10,7 @@ Chuyển chức năng cũ: hồ sơ lương, Công việc/Chi tiết công việ
 
 Nhập sản lượng qua phiếu công việc/đóng thùng. Không tích hợp sổ kho trong đợt này. Module độc lập với lương sale: không gọi pipeline sale, không ghi `payrolls`, không dùng các màn hình/cấu hình lương sale.
 
-Tên bảng dùng đầy đủ theo nghiệp vụ: `employee_work_*`, `employee_leave_*`, `employee_time_entries`, `employee_pay_items` và `employee_payroll_*`. API và route `/employee-payroll`. Dùng lại bảng `employees` và màn hình/API nhân viên hiện có; bổ sung cột còn thiếu theo thiết kế mục 5.1. Không tạo bảng hồ sơ nhân viên thứ hai.
+Tên bảng dùng đầy đủ theo nghiệp vụ: `employee_work_*`, `employee_leave_*`, `employee_time_records`, `employee_pay_items` và `employee_payroll_*`. API và route `/employee-payroll`. Dùng lại bảng `employees` và màn hình/API nhân viên hiện có; bổ sung cột còn thiếu theo thiết kế mục 5.1. Không tạo bảng hồ sơ nhân viên thứ hai.
 
 ## 2. Kết quả rà soát thiết kế
 
@@ -49,6 +49,19 @@ React/TypeScript, TanStack Router/Query, React Hook Form, Zod, ExcelJS theo phi�
 - Mỗi bảng cần chuyển dữ liệu có `legacy_source`, `legacy_id`, `import_batch`, `source_hash`; unique `(legacy_source, legacy_id)` trên từng bảng. Source phân biệt loại bảng cũ khi gộp.
 - Các thao tác tạo có request_key: lưu khóa này trên bản ghi đích và unique theo loại thao tác. Batch dùng batch_key + số thứ tự phần tử; giao dịch phép dùng event_key. Retry cùng khóa nhưng khác payload phải báo xung đột.
 - Bản ghi đã tham gia lương không hard delete; hủy/ngừng hiệu lực và giữ lịch sử.
+
+### Quy ước thuật ngữ theo nghiệp vụ
+
+| Thuật ngữ | Dùng cho | Tên đã thống nhất |
+| --- | --- | --- |
+| sheets / sheet_items | Phiếu công việc và các dòng chia sản lượng của phiếu | employee_work_sheets / employee_work_sheet_items |
+| requests | Đơn nghỉ phép có trạng thái gửi/duyệt/hủy | employee_leave_requests |
+| records | Ghi nhận công/tăng ca theo người/ngày/ca | employee_time_records |
+| balances / transactions | Số dư phép và giao dịch cộng/trừ | employee_leave_balances / employee_leave_transactions |
+| pay_items | Các khoản thu nhập/khấu trừ phát sinh theo nhân viên/kỳ | employee_pay_items |
+| periods / runs / results | Kỳ lương, lần tính và kết quả | employee_payroll_periods / employee_payroll_runs / employee_payroll_results |
+
+Dùng cùng thuật ngữ trong tên bảng, FK, API và mapping migration. Không dùng entries/records/requests thay thế nhau cho cùng đối tượng. Đổi tên không thay cấu trúc: mỗi đơn nghỉ vẫn là một ngày với hai buổi; thao tác nhiều ngày dùng batch_key như thiết kế hiện tại.
 
 ## 5. Mô hình dữ liệu — 12 bảng mới và mở rộng employees
 
@@ -95,7 +108,7 @@ MVP lưu thiết lập hiện hành trên employees và snapshot đầy đủ tr
 | --- | --- | --- |
 | `employee_work_sheets` | kind `WORK/CRATING`, work_date, work_type_id, shift_code, quantity, unit, reported_hours, note, status | index kind/date/status; type phù hợp kind |
 | `employee_work_sheet_items` | work_sheet_id, employee_id, quantity | unique work_sheet/employee; tổng bằng phiếu |
-| `employee_time_entries` | employee_id, work_date, slot_code, kind `ATTENDANCE_ADJUSTMENT/OVERTIME`, payable_days_delta, hours, source_refs_json, reason, status | unique employee/date/slot/kind; chỉ trường phù hợp kind được nhập |
+| `employee_time_records` | employee_id, work_date, slot_code, kind `ATTENDANCE_ADJUSTMENT/OVERTIME`, payable_days_delta, hours, source_refs_json, reason, status | unique employee/date/slot/kind; chỉ trường phù hợp kind được nhập |
 | `employee_pay_items` | employee_id, period, effective_date, kind `INCOME/DEDUCTION`, code, amount, tax_treatment, reason, status, origin_result_id | index employee/period/status |
 
 `employee_work_sheets` lưu phiếu tổng; `employee_work_sheet_items` lưu dòng chi tiết sản lượng chia cho từng nhân viên. Công việc và đóng thùng dùng cùng cặp bảng, phân biệt bằng kind. Vẫn giữ bảng `employee_work_sheet_items` vì phải lọc/tổng hợp sản lượng theo nhân viên thường xuyên.
@@ -108,9 +121,9 @@ Chi tiết phân bổ được sinh từ phiếu và không sửa trực tiếp.
 
 | Bảng | Cột nghiệp vụ chính | Ràng buộc/index |
 | --- | --- | --- |
-| `employee_leave_entries` | employee_id, leave_date, morning, afternoon, leave_type_code, paid, deduct_balance, reason, status, policy_snapshot_json, approved_by/at, batch_key | index employee/date/status; ít nhất một buổi |
+| `employee_leave_requests` | employee_id, leave_date, morning, afternoon, leave_type_code, paid, deduct_balance, reason, status, policy_snapshot_json, approved_by/at, batch_key | index employee/date/status; ít nhất một buổi |
 | `employee_leave_balances` | employee_id, leave_type_code, year, balance, version | unique employee/type/year |
-| `employee_leave_transactions` | balance_id, leave_entry_id nullable, operation, signed_days, event_key, reversal_of nullable, reason | unique event_key; index balance_id; giao dịch bất biến |
+| `employee_leave_transactions` | balance_id, leave_request_id nullable, operation, signed_days, event_key, reversal_of nullable, reason | unique event_key; index balance_id; giao dịch bất biến |
 
 Một bản nghỉ theo ngày như `OnLeaveRegister` cũ; sáng/chiều mỗi buổi 0,5 ngày. UI nhập nhiều ngày tạo nhiều bản ghi cùng batch_key, xử lý trong một transaction khi lưu/duyệt cả nhóm. Không cần header đơn + bảng ngày riêng.
 
@@ -149,7 +162,7 @@ Không có bảng import_batches/legacy_maps riêng. Mapping legacy nằm trên 
 4. Sửa phiếu thay toàn bộ chi tiết phân bổ; hủy giữ chi tiết để tra cứu nhưng loại khỏi tính mới. Tăng input_revision và đánh dấu run nháp bị ảnh hưởng STALE.
 5. Chi tiết công việc/đóng thùng đọc `employee_work_sheet_items` JOIN `employee_work_sheets`; không có endpoint update chi tiết.
 
-Giờ tăng ca kho đối chiếu theo người/ngày/ca trong `employee_time_entries`. Nhiều việc một ca chỉ có một bản giờ; cùng giờ thì liên kết thêm nguồn, khác giờ thì báo cần xác nhận. Sửa/hủy nguồn đặt giờ liên quan về trạng thái cần kiểm tra, không tự lấy SUM/MAX. Tăng ca văn phòng nhập riêng qua UI nhưng dùng cùng bảng. Dữ liệu cũ không xác định ca được phải đưa vào báo cáo đối chiếu.
+Giờ tăng ca kho đối chiếu theo người/ngày/ca trong `employee_time_records`. Nhiều việc một ca chỉ có một bản giờ; cùng giờ thì liên kết thêm nguồn, khác giờ thì báo cần xác nhận. Sửa/hủy nguồn đặt giờ liên quan về trạng thái cần kiểm tra, không tự lấy SUM/MAX. Tăng ca văn phòng nhập riêng qua UI nhưng dùng cùng bảng. Dữ liệu cũ không xác định ca được phải đưa vào báo cáo đối chiếu.
 
 ## 7. Nghỉ phép/ngày phép
 
@@ -157,7 +170,7 @@ Trạng thái đề xuất DRAFT → SUBMITTED → APPROVED/REJECTED; có CANCEL
 
 **Submit/duyệt:** khóa hàng employees của nhân viên rồi các kỳ liên quan theo mục 9; đọc lại trạng thái/version, lịch, hồ sơ, các bản nghỉ SUBMITTED/APPROVED trùng ngày và buổi. Loại buổi không làm việc theo lịch, báo rõ số ngày tính. Kiểm tra xung đột công/tăng ca; chặn khi chưa xử lý. SUBMITTED không trừ quỹ.
 
-**Duyệt:** kiểm tra kỳ OPEN; lấy/tạo balance của năm ngày nghỉ, kiểm tra số dư và policy. Nếu deduct_balance=true, ghi USE và cập nhật balance trong cùng transaction. Event key theo entry/version/USE chống retry. Hai đơn duyệt đồng thời đi qua cùng hàng khóa nên không vượt số dư ngoài policy. API batch nhiều ngày/năm thành công toàn bộ hoặc rollback.
+**Duyệt:** kiểm tra kỳ OPEN; lấy/tạo balance của năm ngày nghỉ, kiểm tra số dư và policy. Nếu deduct_balance=true, ghi USE và cập nhật balance trong cùng transaction. Event key theo leave_request_id/version/USE chống retry. Hai đơn duyệt đồng thời đi qua cùng hàng khóa nên không vượt số dư ngoài policy. API batch nhiều ngày/năm thành công toàn bộ hoặc rollback.
 
 **Hủy:** ghi REFUND đối ứng USE gốc đúng một lần, cập nhật balance, chuyển trạng thái và audit. Nếu kỳ lương đã LOCKED phải mở kỳ có quyền trước hoặc ghi điều chỉnh kỳ sau. Nếu quỹ năm cũ đã chuyển/hết hạn thì chặn hoàn tự động và yêu cầu người phụ trách xác nhận phương án điều chỉnh các năm liên quan; không cộng bừa vào số dư năm hiện tại.
 
@@ -241,8 +254,8 @@ API `/employee-payroll`, paging/ApiResponse theo convention repo, body ghi có e
 | `/work-types`, `/work-rates` | List/get/create/update; cấu hình có hiệu lực và validate kind |
 | `/work-sheets?kind=WORK/CRATING` | List/create/update; `/{id}/confirm`, `/{id}/cancel` |
 | `/work-sheet-items?kind=...&employee_id=...` | Chi tiết phân bổ chỉ đọc |
-| `/attendance`, `/time-entries`, `/pay-items` | Xem bảng công, ghi giờ/điều chỉnh/phát sinh; confirm/cancel |
-| `/leave-entries` | List/create/update nháp; submit/approve/reject/cancel; batch nhiều ngày |
+| `/attendance`, `/time-records`, `/pay-items` | Xem bảng công, ghi giờ/điều chỉnh/phát sinh; confirm/cancel |
+| `/leave-requests` | List/create/update nháp; submit/approve/reject/cancel; batch nhiều ngày |
 | `/leave-balances`, `/leave-balances/{id}/transactions` | Ngày phép và lịch sử |
 | `/leave-grants/preview`, `/leave-grants/apply`, `/leave-adjustments`, `/leave-transfers` | Cấp/điều chỉnh/chuyển phép, event key ổn định |
 | `/periods`, `/runs` | Xem kỳ, tạo run theo kỳ/nhóm |
@@ -271,8 +284,8 @@ Công cụ chuyển dữ liệu theo đợt: export chỉ đọc → manifest/st
 | WhQuantityDetail/WhCratingDetail | `employee_work_sheet_items`, giữ số gốc để đối chiếu |
 | OnLeaveType | Danh mục leave-types có phiên bản đi kèm mã nguồn; giữ mã/nhãn cũ qua mapping |
 | OnLeave | `employee_leave_balances` + `employee_leave_transactions` OPENING/GRANT theo phương án cutover |
-| OnLeaveRegister | `employee_leave_entries`; trạng thái và ảnh hưởng số dư theo quy tắc import |
-| Overtime/ConstsIncurred | `employee_time_entries` / `employee_pay_items` |
+| OnLeaveRegister | `employee_leave_requests`; trạng thái và ảnh hưởng số dư theo quy tắc import |
+| Overtime/ConstsIncurred | `employee_time_records` / `employee_pay_items` |
 | WhSalary/SalaryOffice | `employee_payroll_runs` origin LEGACY + `employee_payroll_results`, không tính lại |
 
 Tên bảng nguồn phải xác nhận qua DAO/schema thật trước script. Không assume trùng ID nhân viên. Import nhiều lần cùng legacy_source/id không nhân bản; source_hash đổi thì preview lại, không ghi đè dữ liệu đã vận hành.
