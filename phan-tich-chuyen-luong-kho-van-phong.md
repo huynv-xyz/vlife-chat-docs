@@ -1,6 +1,6 @@
 # Phân tích chuyển lương kho, văn phòng, nghỉ phép và ngày phép
 
-Ngày cập nhật: 16/10/2026. Trạng thái: phân tích và đề xuất, chưa triển khai.
+Ngày cập nhật: 17/10/2026. Trạng thái: phân tích và đề xuất, chưa triển khai.
 
 Thiết kế kỹ thuật: [TDD lương kho và văn phòng](TDD_LUONG_KHO_VAN_PHONG.md).
 
@@ -139,9 +139,9 @@ Công thức đề xuất:
 `Phép còn lại = số dư đầu kỳ + cấp mới + chuyển vào + điều chỉnh tăng - điều chỉnh giảm - đã dùng + hoàn phép - hết hạn`
 
 - Số dư đầu kỳ phải quy định rõ đã bao gồm phép chuyển năm trước hay chưa; không cộng hai lần.
-- Cấu hình cấp phép theo năm hoặc tích lũy theo tháng, ngày vào làm, thời gian hiệu lực; không tự gán một định mức chung khi chưa được xác nhận.
+- MVP cấp phép theo năm và điều chỉnh được xác nhận, có xét ngày vào làm theo chính sách đã chốt. Tích lũy tự động theo tháng là mở rộng khi có yêu cầu; không tự gán một định mức chung.
 - Chính sách loại nghỉ có hai thuộc tính độc lập: tỷ lệ hưởng lương và có trừ quỹ phép. Ví dụ nghỉ hưởng lương không trừ phép và nghỉ phép năm cần được biểu diễn riêng.
-- Chốt quy tắc chuyển phép qua năm, hạn sử dụng, thứ tự trừ phép cũ/mới và xử lý nhân viên nghỉ việc. Chỉ tự động cấp/chuyển/hết hạn sau khi quy tắc được duyệt.
+- MVP chuyển năm/hết hạn bằng thao tác có xem trước và xác nhận của người phụ trách. Chưa quản lý lô phép, hạn riêng từng lần cấp hoặc thứ tự trừ theo lô; nếu cần nghiệp vụ đó phải bổ sung thiết kế trước triển khai. Hủy nghỉ của quỹ đã chuyển/hết hạn phải đối soát trước khi hoàn.
 - Cấp hoặc điều chỉnh hàng loạt có xem trước, lý do, người duyệt và nhật ký. Chạy lại tác vụ cấp/chuyển phép không được cộng thêm lần nữa.
 - Ghi sổ biến động phép theo giao dịch và liên kết đơn nghỉ; kiểm soát đồng thời khi duyệt nhiều đơn để không vượt số dư ngoài chính sách.
 
@@ -166,7 +166,8 @@ Người dùng chọn kỳ, tính thử, xem lỗi và chi tiết từng khoản
 - Backend và bảng dữ liệu mới có namespace riêng. Không gọi service hoặc ghi bảng kết quả lương sale.
 - Liên kết định danh nhân viên qua mapping; thiết lập lương, phụ cấp, thuế/bảo hiểm và lịch sử kho/văn phòng lưu riêng.
 - Hai bộ tính kho/văn phòng dùng chung nền tảng công/phép và lưu phiên trong module mới, mỗi bộ có công thức riêng.
-- Dùng số thập phân, cấu hình đơn giá có hiệu lực, nhật ký và kiểm soát sửa đồng thời.
+- Thiết kế rút gọn 15 bảng trong TDD: 4 bảng hồ sơ/cấu hình, 4 bảng đầu vào công/lương, 3 bảng nghỉ/ngày phép, 4 bảng kỳ/kết quả/nhật ký. Công việc và đóng thùng dùng chung bảng có loại, giao diện vẫn tách như cũ.
+- Dùng số thập phân, cấu hình đơn giá có hiệu lực, nhật ký và kiểm soát sửa đồng thời. Snapshot và breakdown lưu cùng kết quả nhân viên; không tạo bảng riêng cho từng lớp dữ liệu phụ.
 - Các điểm khác mã cũ như làm tròn, chống trùng giờ tăng ca hoặc ngoại lệ thủ kho cần có mẫu đối chiếu và được ghi nhận trước vận hành.
 
 ## 6. Lộ trình và bàn giao
