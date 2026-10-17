@@ -50,9 +50,9 @@ Bắt buộc ban đầu chỉ có loại việc, tiêu đề và mô tả. Ngư�
 
 Báo lỗi có vùng bổ sung: bước tái hiện, kết quả thực tế, kết quả mong đợi. Tính năng/cải tiến có vùng tiêu chí nghiệm thu. Cho phép gửi khi chưa rõ tất cả; trước khi chuyển sang Cần làm phải bổ sung đủ các mục tương ứng. TASK dùng tiêu chí hoàn thành tương tự tính năng.
 
-Tạo task trước rồi tải tệp lên. Nếu upload lỗi, giữ task và nội dung đã lưu; hiển thị tệp lỗi để thử lại, không tạo task thứ hai.
+Người dùng chọn/dán ảnh ngay trong form tạo. Khi bấm Tạo, hệ thống lưu task rồi upload ảnh và chèn ảnh vào mô tả. Nếu upload lỗi, giữ task và nội dung đã lưu; hiển thị tệp lỗi để thử lại, không tạo task thứ hai.
 
-Người gửi được đề xuất ưu tiên khi tạo; sau tiếp nhận chỉ điều phối được đổi ưu tiên/hạn/người phụ trách. Trường người phụ trách và hạn chỉ mở cho điều phối khi tạo; người gửi thường ghi nhu cầu thời gian trong mô tả. Mọi task mới bắt đầu ở Tiếp nhận, không cho client tự chọn trạng thái khởi tạo.
+Người gửi được đề xuất ưu tiên khi tạo; sau tiếp nhận chỉ điều phối được đổi ưu tiên/hạn/giao cho người khác; người xử lý có thể nhận việc chưa được giao theo mục 2.4. Trường người phụ trách và hạn chỉ mở cho điều phối khi tạo; người gửi thường ghi nhu cầu thời gian trong mô tả. Mọi task mới bắt đầu ở Tiếp nhận, không cho client tự chọn trạng thái khởi tạo.
 
 ### 2.3. Chi tiết công việc
 
@@ -65,6 +65,28 @@ Người gửi được đề xuất ưu tiên khi tạo; sau tiếp nhận ch�
 - Bình luận theo thứ tự thời gian, hỗ trợ ảnh đính kèm ở cấp task; V1 chưa có @mention hoặc email thông báo.
 - Lịch sử hiển thị người thực hiện, thời điểm, nội dung thay đổi dễ đọc; không hiển thị JSON audit thô.
 - Không hiển thị khối tệp/kết quả xử lý trống; bình luận trống vẫn có ô để bắt đầu trao đổi.
+
+### 2.4. Giao việc (Assign task)
+
+- Form tạo có trường **Giao cho** dạng tìm kiếm tên, email hoặc mã nhân viên; hiển thị avatar/tên/mã để tránh nhầm. Một task có một người chịu trách nhiệm chính.
+- Điều phối có thể giao ngay khi tạo; không chọn thì hiện **Chưa phân công**. Người gửi thường không có quyền giao cho người khác; UI hiển thị Chờ phân công.
+- Trong chi tiết có vùng **Người phụ trách** và nút **Giao việc / Đổi người phụ trách**. Điều phối chọn người mới, có thể ghi chú giao việc; khi đổi người đang xử lý phải nhập lý do bàn giao.
+- Trên card hiển thị người đang được giao; click mở chi tiết. Có filter theo người phụ trách và mục Việc của tôi.
+- Người có quyền xử lý được bấm **Nhận việc** cho bản thân khi task Cần làm và chưa phân công. Nhận việc chỉ gán người, không tự chuyển Đang làm; sau đó bấm Bắt đầu.
+- Chỉ điều phối được gỡ phân công. Chỉ cho gỡ ở Tiếp nhận/Cần làm; task Đang làm/Chờ kiểm tra phải bàn giao cho người khác hoặc trả về Cần làm trước.
+- Chỉ giao/đổi người ở Tiếp nhận/Cần làm/Đang làm/Chờ kiểm tra, không áp dụng task đã lưu trữ/kết thúc.
+- Lưu lịch sử người giao, người cũ → người mới, thời điểm và ghi chú. Thông báo cho người mới/người cũ/người tạo theo ma trận; không gửi cho người thao tác.
+
+### 2.5. Upload ảnh mô tả
+
+- Ô mô tả có nút **Thêm ảnh**, hỗ trợ kéo thả và Ctrl/Cmd+V để dán screenshot trực tiếp tại vị trí con trỏ.
+- Xem trước thumbnail, tiến độ upload, lỗi và nút thử lại/gỡ ảnh trước khi lưu. Ảnh đã chèn hiển thị giữa các đoạn mô tả theo đúng thứ tự; bấm ảnh mở xem lớn.
+- PNG/JPEG/WebP, tối đa 10 MB/ảnh; dùng chung hạn mức 10 tệp/task với tệp đính kèm. PDF chỉ là tệp đính kèm, không chèn thành ảnh.
+- Lúc tạo, ảnh được giữ tạm ở trình duyệt đến khi bấm Tạo. Chưa lưu mà đóng/F5 phải cảnh báo mất thay đổi; không tự tạo task chỉ vì dán ảnh.
+- Task đã có: upload ảnh rồi chèn vào bản mô tả đang sửa; bấm Lưu mới cập nhật nội dung. Hủy sửa không tự xóa tệp đã upload khỏi task; tệp còn ở mục đính kèm để dùng lại hoặc gỡ.
+- Người tạo được upload/chèn ảnh vào mô tả của mình ở Tiếp nhận/Từ chối khi có tasks.create; điều phối được sửa mô tả task chưa kết thúc. Người chỉ có tasks.comment được đính kèm tệp, không tự sửa mô tả.
+- Gỡ ảnh khỏi mô tả chỉ bỏ vị trí hiển thị, chưa xóa tệp đính kèm. Tệp đang được dùng trong mô tả phải được gỡ tham chiếu trước khi xóa để tránh ảnh lỗi.
+- Không lưu ảnh dạng base64 trong mô tả, không tải lên dịch vụ ảnh công khai. Xem ảnh kiểm tra quyền task như tải tệp.
 
 ## 3. Luồng xử lý
 
@@ -102,7 +124,7 @@ Lưu trữ chỉ áp dụng cho Hoàn thành/Từ chối/Hủy, chỉ người �
 
 ### 3.1. Từ chối, yêu cầu sửa lại và hủy
 
-- **Từ chối (REJECTED):** yêu cầu chưa được chấp nhận thực hiện, ví dụ ngoài phạm vi hoặc không phù hợp nghiệp vụ. Chỉ điều phối được thực hiện tại Tiếp nhận/Cần làm. Modal bắt buộc lý do 5–2.000 ký tự; hiển thị rõ người từ chối, thời điểm và lý do ở đầu chi tiết.
+- **Từ chối (REJECTED):** yêu cầu chưa được chấp nhận thực hiện, ví dụ ngoài phạm vi hoặc không phù hợp nghiệp vụ. Chỉ điều phối được thực hiện tại Tiếp nhận/Cần làm. Modal có ô **Lý do từ chối / Ghi chú** bắt buộc 5–2.000 ký tự sau khi bỏ khoảng trắng; không chấp nhận note trống, hiển thị lỗi ngay tại ô nhập và không lưu chuyển trạng thái; hiển thị rõ người từ chối, thời điểm và lý do ở đầu chi tiết.
 - **Yêu cầu sửa lại:** kết quả ở Chờ kiểm tra chưa đạt; chuyển về Đang làm với phản hồi cụ thể để người phụ trách tiếp tục. Không chuyển task thành REJECTED.
 - **Hủy (CANCELLED):** dừng yêu cầu đã gửi/đang xử lý hoặc trùng task; giữ lý do và liên kết task gốc nếu trùng.
 - **Cần bổ sung:** nếu chỉ thiếu dữ liệu để đánh giá thì giữ Tiếp nhận, trao đổi qua bình luận; chưa cần từ chối.
@@ -191,6 +213,10 @@ Không tạo noti cho sửa chính tả tiêu đề/mô tả, sửa/gỡ bình l
 12. Bấm thông báo mở đúng task, kể cả Từ chối/Hoàn thành; không có quyền thì giải thích và không lộ dữ liệu.
 13. Không thay đổi nghiệp vụ lương, bán hàng, kho, vl-app hoặc vl-desktop.
 
-## 8. Ngoài V1
+## 8. Trình tự thực hiện và triển khai
+
+Theo yêu cầu: **làm ở local trước, hoàn tất rồi mới deploy production**. Hoàn thiện FE/API/shared và migration trên DB local; chạy kiểm thử quyền, giao việc, reject có note, upload ảnh, thông báo và xem trạng thái. Báo cáo kết quả local và các lỗi còn lại trước bước triển khai. Không dùng production để thử tính năng hoặc tạo dữ liệu giả. Chỉ đưa bản đã qua các tiêu chí nghiệm thu lên prod; khi deploy phải backup và chạy smoke test sau triển khai.
+
+## 9. Ngoài V1
 
 Nhiều bảng/dự án, sprint, subtask/checklist, nhãn tự tạo, nhiều người phụ trách, thứ tự kéo thả trong cột, thông báo email/mobile push, @mention, tự đồng bộ PR, tự đóng task khi deploy, SLA và báo cáo năng suất. Chỉ bổ sung khi có nhu cầu thực tế.

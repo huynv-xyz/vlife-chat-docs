@@ -141,19 +141,27 @@ Mutation task và ghi audit phải cùng transaction/JDBC connection. Cần xác
 
 Audit action: CREATE, UPDATE, ASSIGN, TRANSITION, REJECT, RESUBMIT, REQUEST_CHANGES, BLOCK, UNBLOCK, ARCHIVE, RESTORE, COMMENT_CREATE/EDIT/REMOVE, ATTACHMENT_ADD/REMOVE. Mọi activity gắn entity_type=task, entity_id=task.id; detail_ref trỏ comment/attachment. Ghi trạng thái trước/sau và lý do. Khi mở lại, xóa completed_at/by hiện hành nhưng lịch sử hoàn thành cũ còn trong audit.
 
-### 4.1. Reject và gửi lại
+### 4.1. Giao việc
+
+`/assign` kiểm tra task chưa archived và status thuộc INBOX/TODO/IN_PROGRESS/REVIEW. Người nhận active, có view + (update hoặc manage). manage được giao/đổi người; assignee=null chỉ hợp lệ tại INBOX/TODO. Chỉ có update được tự nhận khi status=TODO và assignee hiện tại null; assignee gửi lên phải bằng current user. Hai người nhận đồng thời dùng expected_version nên chỉ một người thành công.
+
+Đổi người tại IN_PROGRESS/REVIEW bắt buộc note bàn giao 5–2.000 ký tự; những lần giao khác note tùy chọn tối đa2.000. POST task có assignee do manage chọn cũng phát thông báo giao việc, gộp người nhận cùng sự kiện tạo tránh gửi hai noti cho một người. Giao lại đúng người hiện tại là no-op sau kiểm tra quyền/version, không tăng version hoặc gửi noti mới. Server trả allowed_actions.claim/assign/unassign để UI hiển thị đúng.
+
+Audit lưu assignee cũ/mới và note trong cùng transaction với task + notification; không thêm bảng task_assignments. GET assignees nhận keyword tìm tên/email/mã nhân viên, chỉ trả id/name/email/employee_code và avatar nếu có; không trả trường nhạy cảm.
+
+### 4.2. Reject và gửi lại
 
 | Từ → Đến | Quyền và dữ liệu |
 | --- | --- |
-| INBOX/TODO → REJECTED | manage; reason trim dài 5–2.000; server gán rejected_by/at và rejection_reason |
+| INBOX/TODO → REJECTED | manage; UI ô Lý do từ chối / Ghi chú ánh xạ reason, trim dài 5–2.000, bắt buộc cả FE và BE; server gán rejected_by/at và rejection_reason |
 | REJECTED → INBOX | reporter có create hoặc manage; reason mô tả bổ sung 5–2.000; task chưa archived; validate nội dung cơ bản |
 | REVIEW → IN_PROGRESS | reporter có create hoặc manage; reason bắt buộc, action REQUEST_CHANGES |
 
-Không cho assignee chỉ có update tự reject hoặc tự xác nhận kết quả không đạt. Gửi lại giữ ID, xóa rejection_reason/rejected_at/rejected_by hiện hành và assignee/due_date, lưu đầy đủ trước/sau trong audit. Lịch sử mỗi lần từ chối vẫn đọc được. Cờ blocked_reason được xóa khi REJECTED/CANCELLED/DONE; không giữ cờ chặn ở trạng thái kết thúc.
+reason thiếu/trống trả400 field_errors.reason, không đổi status, không ghi audit thành công hoặc gửi noti. Reject lưu nguyên note hợp lệ vào rejection_reason và audit; thông báo mời người gửi mở task xem note. Không cho assignee chỉ có update tự reject hoặc tự xác nhận kết quả không đạt. Gửi lại giữ ID, xóa rejection_reason/rejected_at/rejected_by hiện hành và assignee/due_date, lưu đầy đủ trước/sau trong audit. Lịch sử mỗi lần từ chối vẫn đọc được. Cờ blocked_reason được xóa khi REJECTED/CANCELLED/DONE; không giữ cờ chặn ở trạng thái kết thúc.
 
 REJECTED loại khỏi overdue và năm cột board mặc định; API trả count riêng cho lối tắt, filter status=REJECTED dùng list. archived cho phép DONE/REJECTED/CANCELLED. Trạng thái archived phải được restore trước mọi sửa/chuyển; restore không tự gửi lại. Thời điểm/lý do reject không nhận qua PATCH.
 
-### 4.2. Phát sinh thông báo
+### 4.3. Phát sinh thông báo
 
 - Bảng nhận theo ma trận mục6 đặc tả; resolve recipients từ users và quyền thực tế. Gộp IDs, bỏ actor và tài khoản inactive/không có view.
 - Cùng transaction: mutation task/comment/tệp → audit → INSERT user_notifications cho từng người nhận → commit. Nếu ghi noti lỗi phải rollback cả mutation; UI chỉ báo thành công sau commit.
@@ -176,13 +184,14 @@ Prefix `/tasks`; giữ envelope ApiResponse và chuẩn lỗi hiện có.
 | POST /tasks | Tạo: request_key, type,title,description và thuộc tính được phép |
 | GET /tasks/{id} | Chi tiết + allowed_actions, version; không trả audit/tệp vô hạn |
 | PATCH /tasks/{id} | Sửa field cho phép + expected_version |
-| POST /tasks/{id}/assign | assignee_user_id nullable, expected_version; quyền manage |
+| POST /tasks/{id}/assign | assignee_user_id nullable, expected_version, note; manage giao người khác, update chỉ tự nhận TODO chưa được giao |
 | POST /tasks/{id}/transition | target_status, expected_version, reason, resolution/delivery nếu bước đó cần |
 | POST /tasks/{id}/archive | expected_version; chỉ DONE/REJECTED/CANCELLED |
 | POST /tasks/{id}/restore | expected_version; gỡ lưu trữ, giữ trạng thái nghiệp vụ |
 | GET/POST /tasks/{id}/comments | Cursor đọc hoặc tạo có request_key |
 | PATCH/DELETE /tasks/{id}/comments/{commentId} | Kiểm tra comment thuộc task; expected_version |
 | GET/POST /tasks/{id}/attachments | Danh sách hoặc multipart, request_key |
+| GET /tasks/{id}/attachments/{attachmentId}/preview | Ảnh PNG/JPEG/WebP đã kiểm tra quyền, trả inline; PDF không có preview ảnh |
 | GET/DELETE /tasks/{id}/attachments/{attachmentId} | Download có auth hoặc ẩn metadata; kiểm tra FK |
 | GET /tasks/{id}/activity | Lịch sử đã lọc an toàn, cursor |
 
@@ -233,6 +242,16 @@ GET detail task trả thêm rejection_reason/by/at và allowed_actions gồm rej
 - DnD: package hiện tại chưa thấy thư viện chuyên dụng trong package.json; đề xuất bổ sung @dnd-kit/core ở bước triển khai sau khi kiểm tra tương thích lockfile. Không nâng React/router để làm tính năng này. Có nút chuyển trạng thái và thông báo screen reader, không chỉ HTML drag chuột.
 - Màn hình nhỏ cho cuộn ngang cột hoặc dùng list; không ép năm cột nhỏ đến mức không đọc được.
 
+### 6.1. Ảnh trong mô tả
+
+- Dùng token Markdown nội bộ `![chú thích](attachment:123)`; server parse bằng parser, chỉ chấp nhận attachment tồn tại, chưa gỡ, đúng task và MIME ảnh hợp lệ. Không lưu base64/blob URL/object URL vào DB.
+- Renderer resolve ID thành preview endpoint có auth, giữ alt text, thumbnail và lightbox. Với auth bearer, tải blob bằng API client rồi tạo object URL và revoke khi unmount; không nhúng token vào query URL. Không load ảnh remote tùy ý từ Markdown.
+- Editor nhận input file/drop/paste ảnh, tránh chặn paste văn bản bình thường. Ảnh mới có placeholder local; upload thành công mới đổi thành attachment token. Validate trước save không còn placeholder chưa resolve.
+- Form tạo: lưu nội dung văn bản trước bằng request_key; dùng ID/version trả về để upload ảnh; sau đó PATCH mô tả chứa token với expected_version. Lỗi ở bước sau hiển thị “Task đã tạo, ảnh/mô tả ảnh chưa lưu” và cho retry vào đúng ID; không gửi POST task lần nữa. Khi409 giữ draft và yêu cầu đối chiếu trước khi lưu, không ghi đè.
+- Quyền upload được mở thêm cho reporter có create tại INBOX/REJECTED và manage tại trạng thái chưa kết thúc để hỗ trợ ảnh mô tả, ngoài comment theo quyền đính kèm hiện tại. Quyền sửa mô tả vẫn độc lập với quyền upload.
+- Thêm/gỡ attachment và PATCH mô tả khóa cùng hàng task trong transaction khi kiểm tra reference/quota. Không cho DELETE tệp còn token trong description; trả409 ATTACHMENT_IN_USE. PATCH đồng thời phải kiểm tra lại tệp chưa bị gỡ dưới khóa; không để race sinh ảnh hỏng.
+- Upload đã thành công nhưng hủy sửa để lại attachment hợp lệ, không bị job file mồ côi xóa vì có metadata. Gỡ token không xóa tệp vật lý. Không thêm bảng ảnh riêng.
+
 ## 7. Upload, bảo mật và lưu trữ
 
 - Kiểm tra auth và quyền task trước đọc body lớn; giới hạn tổng 10 tệp còn hiệu lực,10 MB mỗi tệp, kiểm tra cả MIME/signature thật.
@@ -255,6 +274,7 @@ Backup DB và thư mục tệp cùng quy trình. Log request ID và task ID, tr�
 
 | Nhóm | Ca cần chứng minh |
 | --- | --- |
+| Giao việc/ảnh | Giao khi tạo, giao lại có note, tự nhận chỉ TODO chưa giao, race hai người nhận; paste/drop/upload/preview ảnh; retry không tạo task trùng; attachment task khác bị từ chối; race xóa tệp/chèn ảnh không sinh reference hỏng |
 | Reject/noti | Chỉ manage reject; reject/gửi lại/request_changes bắt buộc lý do; gửi lại giữ ID và audit, reset phân công/hạn; archived phải restore trước; REJECTED không quá hạn |
 | Thông báo | Đúng ma trận nhận, bỏ actor/gộp trùng; retry không nhân đôi; lỗi insert noti rollback mutation; mất quyền/inactive không lộ dữ liệu; read của user khác 404; read-all watermark không đánh dấu noti mới; F5 giữ đã đọc; count khớp list |
 | State machine | Mỗi cạnh hợp lệ; chặn mọi cạnh khác; REVIEW cần resolution; DONE cần xác nhận triển khai; mở lại giữ audit |
@@ -276,8 +296,8 @@ Mục tiêu tải thử: 10.000 task và 50.000 bình luận, trang board đầu
 2. Hoàn thiện migration 4 bảng, permission, service/state machine/audit và test backend.
 3. Làm danh sách, tạo/sửa/chi tiết và filter URL trước; sau đó board/DnD dùng cùng API nghiệp vụ.
 4. Bổ sung bình luận, tệp bảo vệ quyền, activity và chuông/trang thông báo; kiểm tra upload/rollback/concurrency.
-5. QA với dữ liệu test ở staging, không thêm task giả vào production.
-6. Backup, migration additive, deploy API rồi CMS; cấp quyền ADMIN trước, xác nhận smoke rồi mới mở quyền cho nhóm nội bộ.
+5. Hoàn thiện và QA trên local trước: FE/API/shared + DB local, chạy đầy đủ giao việc/reject note/upload ảnh/noti/quyền và báo cáo kết quả. Nếu có staging thì kiểm tra bổ sung sau local; không dùng production để thử hoặc thêm task giả.
+6. Chỉ sau khi local hoàn tất và các kiểm thử đạt mới deploy production: backup, migration additive, deploy API rồi CMS; cấp quyền ADMIN trước, xác nhận smoke rồi mới mở quyền cho nhóm nội bộ.
 7. Nếu rollback ứng dụng, giữ bảng/tệp mới để không mất dữ liệu đã nhập; không rollback bằng DROP TABLE.
 
 Lần làm hiện tại chỉ viết đặc tả và TDD. Chưa tạo bảng, thêm dependency, sửa nghiệp vụ hoặc triển khai module mới lên production.
